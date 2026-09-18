@@ -5,14 +5,23 @@ import crypto from "crypto";
 const DATABASE_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
 // Memória local de contingência (caso o banco ainda não tenha sido conectado na Vercel)
-interface MemoryAccount {
+export interface MemoryAccount {
   id: number;
   name: string;
   password: string;
   email: string;
-  server: string;
-  starter: string;
   premdays: number;
+  created_at: string;
+}
+
+export interface MemoryPlayer {
+  id: number;
+  account_id: number;
+  name: string;
+  server: string;
+  pokemon: string;
+  level: number;
+  vocation: number;
   created_at: string;
 }
 
@@ -22,9 +31,20 @@ const memoryAccounts: MemoryAccount[] = [
     name: "admin",
     password: hashPassword("admin"),
     email: "admin@poketibia.com",
-    server: "valaria",
-    starter: "Charizard",
     premdays: 30,
+    created_at: new Date().toISOString(),
+  },
+];
+
+const memoryPlayers: MemoryPlayer[] = [
+  {
+    id: 1,
+    account_id: 1,
+    name: "Red Champion",
+    server: "valaria",
+    pokemon: "Charizard",
+    level: 100,
+    vocation: 1,
     created_at: new Date().toISOString(),
   },
 ];
@@ -46,31 +66,38 @@ export async function ensureTablesExist() {
   if (!sql) return;
 
   try {
-    // Tabela de Contas (padrão PokéTibia / TFS)
+    // Tabela de Contas (apenas dados da conta)
     await sql`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
         name VARCHAR(32) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         email VARCHAR(255),
-        server VARCHAR(32) DEFAULT 'valaria',
-        starter VARCHAR(32),
         premdays INT DEFAULT 3,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
-    // Tabela de Personagens
+    // Tabela de Personagens (vinculados à conta, com servidor e inicial)
     await sql`
       CREATE TABLE IF NOT EXISTS players (
         id SERIAL PRIMARY KEY,
         account_id INT REFERENCES accounts(id) ON DELETE CASCADE,
         name VARCHAR(32) UNIQUE NOT NULL,
+        server VARCHAR(32) DEFAULT 'valaria',
         level INT DEFAULT 1,
         vocation INT DEFAULT 1,
         pokemon VARCHAR(64) DEFAULT 'Charmander',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `;
+
+    // Garante que a coluna server e pokemon existam caso a tabela tenha sido criada em versão anterior
+    await sql`
+      ALTER TABLE players ADD COLUMN IF NOT EXISTS server VARCHAR(32) DEFAULT 'valaria';
+    `;
+    await sql`
+      ALTER TABLE players ADD COLUMN IF NOT EXISTS pokemon VARCHAR(64) DEFAULT 'Charmander';
     `;
 
     tablesInitialized = true;
@@ -106,7 +133,7 @@ export async function checkDbStatus(): Promise<{ connected: boolean; provider: s
 }
 
 // =========================================================================
-// MÉTODOS DE BANCO DE DADOS (COM SUPORTE A NUVEM VERCEL E MEMÓRIA LOCAL)
+// MÉTODOS DE CONTAS
 // =========================================================================
 
 // Busca conta por nome
@@ -139,13 +166,11 @@ export async function findAccountByEmail(email: string) {
   return found || null;
 }
 
-// Cria uma nova conta
+// Cria uma nova conta (sem personagens ainda)
 export async function createAccount(data: {
   account: string;
   email: string;
   password: string;
-  server: string;
-  starter: string;
 }) {
   const sql = getSqlClient();
   const hashedPassword = hashPassword(data.password);
@@ -153,24 +178,11 @@ export async function createAccount(data: {
   if (sql) {
     await ensureTablesExist();
     const result = await sql`
-      INSERT INTO accounts (name, password, email, server, starter, premdays)
-      VALUES (${data.account}, ${hashedPassword}, ${data.email || ""}, ${data.server}, ${data.starter}, 3)
-      RETURNING id, name, email, server, starter, premdays;
+      INSERT INTO accounts (name, password, email, premdays)
+      VALUES (${data.account}, ${hashedPassword}, ${data.email || ""}, 3)
+      RETURNING id, name, email, premdays, created_at;
     `;
-    const createdAcc = result[0];
-
-    // Cria o personagem inicial na tabela players
-    try {
-      await sql`
-        INSERT INTO players (account_id, name, level, vocation, pokemon)
-        VALUES (${createdAcc.id}, ${data.account}, 1, 1, ${data.starter})
-        ON CONFLICT DO NOTHING;
-      `;
-    } catch (e) {
-      console.warn("Aviso ao criar player inicial:", e);
-    }
-
-    return createdAcc;
+    return result[0];
   }
 
   // Salva na memória local enquanto o usuário ativa o banco na Vercel
@@ -179,24 +191,11 @@ export async function createAccount(data: {
     name: data.account,
     password: hashedPassword,
     email: data.email || "",
-    server: data.server,
-    starter: data.starter,
     premdays: 3,
     created_at: new Date().toISOString(),
   };
   memoryAccounts.push(newAccount);
   return newAccount;
-}
-
-// Busca personagens de uma conta
-export async function getPlayersByAccountId(accountId: number) {
-  const sql = getSqlClient();
-  if (sql) {
-    await ensureTablesExist();
-    const rows = await sql`SELECT id, name, level, vocation, pokemon FROM players WHERE account_id = ${accountId}`;
-    return rows;
-  }
-  return [];
 }
 
 // Autentica login
@@ -212,3 +211,71 @@ export async function authenticateAccount(accountName: string, plainPassword: st
   return account;
 }
 
+// =========================================================================
+// MÉTODOS DE PERSONAGENS (PLAYERS)
+// =========================================================================
+
+// Busca personagem por nome (em qualquer conta)
+export async function findPlayerByName(playerName: string) {
+  const sql = getSqlClient();
+
+  if (sql) {
+    await ensureTablesExist();
+    const rows = await sql`SELECT * FROM players WHERE LOWER(name) = LOWER(${playerName}) LIMIT 1`;
+    return rows[0] || null;
+  }
+
+  const found = memoryPlayers.find((p) => p.name.toLowerCase() === playerName.toLowerCase());
+  return found || null;
+}
+
+// Busca personagens de uma conta específica
+export async function getPlayersByAccountId(accountId: number) {
+  const sql = getSqlClient();
+
+  if (sql) {
+    await ensureTablesExist();
+    const rows = await sql`
+      SELECT id, account_id, name, server, pokemon, level, vocation, created_at 
+      FROM players 
+      WHERE account_id = ${accountId} 
+      ORDER BY id DESC
+    `;
+    return rows;
+  }
+
+  return memoryPlayers.filter((p) => p.account_id === accountId);
+}
+
+// Cria um novo personagem para uma conta existente
+export async function createPlayer(data: {
+  accountId: number;
+  name: string;
+  server: string;
+  pokemon: string;
+}) {
+  const sql = getSqlClient();
+
+  if (sql) {
+    await ensureTablesExist();
+    const result = await sql`
+      INSERT INTO players (account_id, name, server, pokemon, level, vocation)
+      VALUES (${data.accountId}, ${data.name}, ${data.server}, ${data.pokemon}, 1, 1)
+      RETURNING id, account_id, name, server, pokemon, level, vocation, created_at;
+    `;
+    return result[0];
+  }
+
+  const newPlayer: MemoryPlayer = {
+    id: memoryPlayers.length + 1,
+    account_id: data.accountId,
+    name: data.name,
+    server: data.server,
+    pokemon: data.pokemon,
+    level: 1,
+    vocation: 1,
+    created_at: new Date().toISOString(),
+  };
+  memoryPlayers.push(newPlayer);
+  return newPlayer;
+}

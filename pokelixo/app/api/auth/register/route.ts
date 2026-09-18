@@ -4,7 +4,7 @@ import { findAccountByName, findAccountByEmail, createAccount } from "@/lib/db";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { account, email, password, server, starterPokemon } = body;
+    const { account, email, password } = body;
 
     // Validações básicas de formulário
     if (!account || !password) {
@@ -49,16 +49,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Cria a conta no banco de dados
-    const chosenServer = server ? String(server).toLowerCase() : "valaria";
-    const chosenStarter = starterPokemon ? String(starterPokemon) : "Charmander";
-
+    // 3. Cria a conta no banco de dados (sem personagens)
     const newAccount = await createAccount({
       account: trimmedAccount,
       email: email ? String(email).trim() : "",
       password: String(password),
-      server: chosenServer,
-      starter: chosenStarter,
     });
 
     return NextResponse.json({
@@ -67,10 +62,9 @@ export async function POST(req: NextRequest) {
         id: newAccount.id,
         name: newAccount.name,
         email: newAccount.email,
-        server: newAccount.server,
-        starter: newAccount.starter,
+        premdays: newAccount.premdays,
       },
-      message: `Conta "${trimmedAccount}" criada com sucesso no servidor ${chosenServer.toUpperCase()}! Inicial escolhido: ${chosenStarter}.`,
+      message: `Conta "${trimmedAccount}" criada com sucesso! Faça login para criar seu primeiro personagem e escolher seu Pokémon inicial.`,
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : "Erro desconhecido";

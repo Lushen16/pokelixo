@@ -4,7 +4,7 @@ import { authenticateAccount, getPlayersByAccountId } from "@/lib/db";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { account, password, server } = body;
+    const { account, password } = body;
 
     if (!account || !password) {
       return NextResponse.json(
@@ -33,9 +33,8 @@ export async function POST(req: NextRequest) {
         id: userAccount.id,
         name: userAccount.name,
         email: userAccount.email,
-        server: userAccount.server || server || "Valaria",
-        starter: userAccount.starter,
         premdays: userAccount.premdays ?? 3,
+        created_at: userAccount.created_at,
       },
       players,
     });
