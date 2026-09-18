@@ -48,30 +48,148 @@ const STARTER_POKEMON: StarterPokemon[] = [
   { id: "popplio", name: "Popplio", gen: 7, region: "Alola", type: "Água", icon: "💧" },
 ];
 
+interface GameServer {
+  id: "valaria" | "orten" | "zertiros";
+  name: string;
+  type: string;
+  online: number;
+  description: string;
+  pvpType: "Open PvP" | "PvP-Enforced" | "No-PvP (RPG)";
+  topPlayers: {
+    first: { name: string; initials: string; guild: string; level: number; pokemon: string; wins: number };
+    second: { name: string; initials: string; guild: string; level: number; pokemon: string; wins: number };
+    third: { name: string; initials: string; guild: string; level: number; pokemon: string; wins: number };
+    runnersUp: Array<{ rank: number; name: string; guild: string; level: number; pokemon: string; wins: number }>;
+  };
+}
+
+const SERVERS: Record<"valaria" | "orten" | "zertiros", GameServer> = {
+  valaria: {
+    id: "valaria",
+    name: "Valaria",
+    type: "Open PvP",
+    online: 412,
+    description: "Servidor Principal • Guerras de Guildas e Torneios Diários",
+    pvpType: "Open PvP",
+    topPlayers: {
+      first: { name: "Red Master", initials: "RM", guild: "Elite Four", level: 465, pokemon: "Shiny Charizard", wins: 389 },
+      second: { name: "Blue Oak", initials: "BO", guild: "Pallet Champions", level: 438, pokemon: "Shiny Blastoise", wins: 312 },
+      third: { name: "Cynthia", initials: "CY", guild: "Sinnoh Legends", level: 421, pokemon: "Garchomp", wins: 284 },
+      runnersUp: [
+        { rank: 4, name: "Steven Stone", guild: "Hoenn League", level: 412, pokemon: "Metagross", wins: 265 },
+        { rank: 5, name: "Lance Dragon", guild: "Dragon Clan", level: 405, pokemon: "Dragonite", wins: 248 },
+        { rank: 6, name: "Misty Cerulean", guild: "Water Masters", level: 398, pokemon: "Starmie", wins: 230 },
+        { rank: 7, name: "Brock Pewter", guild: "Boulder Gym", level: 391, pokemon: "Steelix", wins: 215 },
+      ],
+    },
+  },
+  orten: {
+    id: "orten",
+    name: "Orten",
+    type: "PvP-Enforced",
+    online: 285,
+    description: "Servidor Hardcore • Batalhas Frequentes e Foco em PvP",
+    pvpType: "PvP-Enforced",
+    topPlayers: {
+      first: { name: "Shadow Ash", initials: "SA", guild: "Dark Vanguard", level: 452, pokemon: "Shiny Gengar", wins: 410 },
+      second: { name: "Gary Rival", initials: "GR", guild: "Kanto Elite", level: 440, pokemon: "Arcanine", wins: 335 },
+      third: { name: "Leon King", initials: "LK", guild: "Galar Monarchs", level: 429, pokemon: "Dragapult", wins: 295 },
+      runnersUp: [
+        { rank: 4, name: "Raihan Storm", guild: "Dragon Stadium", level: 415, pokemon: "Duraludon", wins: 270 },
+        { rank: 5, name: "Piers Dark", guild: "Spikemuth Punk", level: 408, pokemon: "Obstagoon", wins: 252 },
+        { rank: 6, name: "Bea Strike", guild: "Fighting Spirit", level: 399, pokemon: "Machamp", wins: 238 },
+        { rank: 7, name: "Allister Ghost", guild: "Spooky Night", level: 390, pokemon: "Cursola", wins: 220 },
+      ],
+    },
+  },
+  zertiros: {
+    id: "zertiros",
+    name: "Zertiros",
+    type: "No-PvP (RPG)",
+    online: 340,
+    description: "Servidor Cooperativo • Quests Lendárias, Puzzles e Caçadas",
+    pvpType: "No-PvP (RPG)",
+    topPlayers: {
+      first: { name: "Aurora Trainer", initials: "AT", guild: "Mystic Guardians", level: 448, pokemon: "Shiny Gardevoir", wins: 260 },
+      second: { name: "Wallace Ocean", initials: "WO", guild: "Sootopolis Clan", level: 435, pokemon: "Milotic", wins: 245 },
+      third: { name: "Diantha Star", initials: "DS", guild: "Kalos Nobles", level: 419, pokemon: "Goodra", wins: 230 },
+      runnersUp: [
+        { rank: 4, name: "Kukui Professor", guild: "Alola Haven", level: 410, pokemon: "Incineroar", wins: 218 },
+        { rank: 5, name: "Gladion Null", guild: "Aether Syndicate", level: 402, pokemon: "Silvally", wins: 205 },
+        { rank: 6, name: "Lillie Snow", guild: "Sun & Moon", level: 395, pokemon: "Alolan Ninetales", wins: 190 },
+        { rank: 7, name: "Hau Alola", guild: "Malasada Crew", level: 388, pokemon: "Alolan Raichu", wins: 182 },
+      ],
+    },
+  },
+};
+
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"home" | "conta" | "download" | "info">("home");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountMode, setAccountMode] = useState<"register" | "login">("register");
+  const [selectedServer, setSelectedServer] = useState<"valaria" | "orten" | "zertiros">("valaria");
   const [selectedStarterId, setSelectedStarterId] = useState<string>("charmander");
   const [isStarterMenuOpen, setIsStarterMenuOpen] = useState<boolean>(false);
   const [starterGenFilter, setStarterGenFilter] = useState<number | "all">("all");
   const [accountForm, setAccountForm] = useState({ account: "", email: "", password: "" });
   const [formFeedback, setFormFeedback] = useState<string | null>(null);
+  const [feedbackType, setFeedbackType] = useState<"success" | "error" | "warning">("success");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const currentStarter = STARTER_POKEMON.find((p) => p.id === selectedStarterId) || STARTER_POKEMON[1];
+  const activeServerData = SERVERS[selectedServer];
 
-  const handleAccountSubmit = (e: React.FormEvent) => {
+  const handleAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountForm.account || !accountForm.password) {
+      setFeedbackType("error");
       setFormFeedback("Por favor, preencha todos os campos obrigatórios.");
       return;
     }
-    if (accountMode === "register") {
-      setFormFeedback(
-        `Conta "${accountForm.account}" criada com sucesso! Inicial: ${currentStarter.name} (${currentStarter.gen}ª Geração - ${currentStarter.region}).`
-      );
-    } else {
-      setFormFeedback(`Bem-vindo de volta, Treinador ${accountForm.account}!`);
+
+    setIsSubmitting(true);
+    setFormFeedback(null);
+
+    try {
+      const endpoint = accountMode === "register" ? "/api/auth/register" : "/api/auth/login";
+      const payload =
+        accountMode === "register"
+          ? {
+              account: accountForm.account,
+              email: accountForm.email,
+              password: accountForm.password,
+              server: selectedServer,
+              starterPokemon: currentStarter.name,
+            }
+          : {
+              account: accountForm.account,
+              password: accountForm.password,
+              server: selectedServer,
+            };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setFeedbackType("success");
+        setFormFeedback(data.message);
+        if (accountMode === "register") {
+          setAccountForm({ account: "", email: "", password: "" });
+        }
+      } else {
+        setFeedbackType(data.isDbOffline ? "warning" : "error");
+        setFormFeedback(data.message || "Não foi possível concluir a operação.");
+      }
+    } catch {
+      setFeedbackType("error");
+      setFormFeedback("Erro de conexão ao tentar se comunicar com a API do servidor.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -161,7 +279,7 @@ export default function HomePage() {
           <div className="hidden lg:flex items-center gap-4">
             <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-950/50 border border-cyan-500/30 text-xs font-medium text-cyan-300">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
-              <span>Online: <strong className="text-white">412</strong> Treinadores</span>
+              <span>{activeServerData.name}: <strong className="text-white">{activeServerData.online}</strong> Online</span>
             </div>
 
             <a
@@ -242,7 +360,7 @@ export default function HomePage() {
             </a>
             <div className="pt-2 border-t border-purple-900/40 flex items-center justify-between">
               <span className="text-xs text-cyan-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" /> Servidor Online (412)
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" /> Servidor {activeServerData.name} ({activeServerData.online} Online)
               </span>
               <a
                 href="#minha-conta"
@@ -426,17 +544,62 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Mensagem de Feedback */}
+            {/* Mensagem de Feedback Dinâmica */}
             {formFeedback && (
-              <div className="mb-6 p-4 rounded-xl bg-blue-950/50 border border-cyan-500/40 text-cyan-200 text-sm flex items-center gap-3">
-                <svg className="w-5 h-5 shrink-0 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>{formFeedback}</span>
+              <div
+                className={`mb-6 p-4 rounded-xl border text-sm flex items-start gap-3 transition-all ${
+                  feedbackType === "success"
+                    ? "bg-emerald-950/70 border-emerald-500/40 text-emerald-300"
+                    : feedbackType === "warning"
+                    ? "bg-amber-950/70 border-amber-500/40 text-amber-300"
+                    : "bg-red-950/70 border-red-500/40 text-red-300"
+                }`}
+              >
+                <span className="text-base shrink-0">
+                  {feedbackType === "success" ? "✓" : feedbackType === "warning" ? "⚠️" : "✕"}
+                </span>
+                <span className="leading-relaxed">{formFeedback}</span>
               </div>
             )}
 
             <form onSubmit={handleAccountSubmit} className="space-y-5">
+              {/* Escolha do Servidor / Mundo (Valaria, Orten, Zertiros) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                    Selecione o Servidor / Mundo
+                  </label>
+                  <span className="text-[11px] text-cyan-400 font-semibold">
+                    {activeServerData.name} ({activeServerData.pvpType})
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {(["valaria", "orten", "zertiros"] as const).map((srvKey) => {
+                    const srv = SERVERS[srvKey];
+                    const isSelected = selectedServer === srvKey;
+                    return (
+                      <button
+                        key={srvKey}
+                        type="button"
+                        onClick={() => setSelectedServer(srvKey)}
+                        className={`p-3 rounded-xl border text-left transition-all relative ${
+                          isSelected
+                            ? "border-cyan-400 bg-purple-950/70 ring-2 ring-cyan-400/40 text-white shadow-lg shadow-purple-900/30"
+                            : "border-purple-950 bg-[#03050a] text-zinc-400 hover:border-purple-800 hover:text-zinc-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-bold text-white">{srv.name}</span>
+                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                        </div>
+                        <span className="block text-[10px] text-cyan-300 font-semibold">{srv.pvpType}</span>
+                        <span className="block text-[10px] text-zinc-400 mt-0.5">{srv.online} online</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                   Nome da Conta (Username)
@@ -639,9 +802,17 @@ export default function HomePage() {
 
               <button
                 type="submit"
-                className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white font-bold text-sm uppercase tracking-wider shadow-lg shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                disabled={isSubmitting}
+                className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white font-bold text-sm uppercase tracking-wider shadow-lg shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2"
               >
-                {accountMode === "register" ? "Concluir Cadastro & Jogar" : "Entrar no Painel"}
+                {isSubmitting ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span>Conectando ao Banco...</span>
+                  </>
+                ) : (
+                  accountMode === "register" ? "Concluir Cadastro & Jogar" : "Entrar no Painel"
+                )}
               </button>
             </form>
           </div>
@@ -728,16 +899,45 @@ export default function HomePage() {
       {/* ========================================================================= */}
       <section id="informacao" className="py-20 bg-[#04060d] border-t border-purple-950/60 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10">
             <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Hall da Fama</span>
             <h2 className="text-3xl sm:text-5xl font-black text-white mt-2">Pódio dos Melhores Treinadores</h2>
             <p className="text-zinc-400 max-w-xl mx-auto mt-3 text-sm">
-              Os maiores mestres de PokéTibia da temporada. Batalhe, suba de nível e garanta seu lugar no pódio!
+              Os maiores mestres de PokéTibia por servidor. Escolha o mundo para ver a liderança da temporada!
             </p>
+
+            {/* Seletor de Servidor para o Ranking (Valaria, Orten, Zertiros) */}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+              {(["valaria", "orten", "zertiros"] as const).map((srvKey) => {
+                const srv = SERVERS[srvKey];
+                const isSelected = selectedServer === srvKey;
+                return (
+                  <button
+                    key={srvKey}
+                    type="button"
+                    onClick={() => setSelectedServer(srvKey)}
+                    className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2.5 ${
+                      isSelected
+                        ? "bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-xl shadow-purple-900/40 ring-2 ring-cyan-400/50 scale-105"
+                        : "bg-[#060914] text-zinc-400 hover:text-white border border-purple-950 hover:border-purple-800"
+                    }`}
+                  >
+                    <span>Mundo {srv.name}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-black/40 text-[10px] font-semibold text-cyan-300">
+                      {srv.pvpType}
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 text-xs text-indigo-300 font-medium">
+              Exibindo ranking do servidor: <strong className="text-white">{activeServerData.name}</strong> • {activeServerData.description}
+            </div>
           </div>
 
           {/* ===================================================================== */}
-          {/* PÓDIO TOP 3 (1º, 2º e 3º LUGAR)                                       */}
+          {/* PÓDIO TOP 3 (1º, 2º e 3º LUGAR) - DINÂMICO                            */}
           {/* ===================================================================== */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end max-w-4xl mx-auto mb-16">
             {/* 2º LUGAR (AZUL / PRATA) */}
@@ -746,7 +946,7 @@ export default function HomePage() {
                 <span className="text-3xl mb-1">🥈</span>
                 <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-400 via-indigo-300 to-cyan-300 p-1 shadow-lg shadow-blue-500/30">
                   <div className="w-full h-full rounded-full bg-[#080d1a] flex items-center justify-center text-2xl font-black text-cyan-300">
-                    BO
+                    {activeServerData.topPlayers.second.initials}
                   </div>
                 </div>
                 <span className="absolute -bottom-2 px-2.5 py-0.5 rounded-full bg-blue-950 text-[10px] font-bold text-cyan-300 uppercase tracking-wide border border-cyan-500/40">
@@ -755,21 +955,21 @@ export default function HomePage() {
               </div>
 
               <div className="w-full p-6 rounded-2xl bg-gradient-to-b from-[#080d1a] to-[#03050a] border border-blue-800/50 text-center shadow-lg pt-8">
-                <h4 className="text-lg font-bold text-white">Blue Oak</h4>
-                <div className="text-xs font-semibold text-cyan-400/90 mt-0.5">Guild: Pallet Champions</div>
+                <h4 className="text-lg font-bold text-white">{activeServerData.topPlayers.second.name}</h4>
+                <div className="text-xs font-semibold text-cyan-400/90 mt-0.5">Guild: {activeServerData.topPlayers.second.guild}</div>
 
                 <div className="mt-4 pt-4 border-t border-blue-950 space-y-2 text-xs">
                   <div className="flex justify-between text-zinc-400">
                     <span>Nível:</span>
-                    <strong className="text-cyan-300 font-bold">Level 438</strong>
+                    <strong className="text-cyan-300 font-bold">Level {activeServerData.topPlayers.second.level}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
                     <span>Principal:</span>
-                    <strong className="text-blue-400 font-semibold">Shiny Blastoise</strong>
+                    <strong className="text-blue-400 font-semibold">{activeServerData.topPlayers.second.pokemon}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
                     <span>PvP:</span>
-                    <strong className="text-cyan-400 font-bold">312 Vitórias</strong>
+                    <strong className="text-cyan-400 font-bold">{activeServerData.topPlayers.second.wins} Vitórias</strong>
                   </div>
                 </div>
               </div>
@@ -781,7 +981,7 @@ export default function HomePage() {
                 <span className="text-4xl animate-bounce mb-1">👑</span>
                 <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-purple-500 via-indigo-300 to-cyan-400 p-1.5 shadow-2xl shadow-purple-500/40">
                   <div className="w-full h-full rounded-full bg-[#0a071c] flex items-center justify-center text-3xl font-black text-cyan-300">
-                    RM
+                    {activeServerData.topPlayers.first.initials}
                   </div>
                 </div>
                 <span className="absolute -bottom-2 px-3 py-0.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-[10px] font-extrabold text-white uppercase tracking-wider shadow">
@@ -791,23 +991,23 @@ export default function HomePage() {
 
               <div className="w-full p-7 rounded-2xl bg-gradient-to-b from-[#0e0924] via-[#080a18] to-[#020409] border-2 border-purple-500/60 text-center shadow-2xl shadow-purple-900/30 pt-9 relative">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-purple-950/80 border border-purple-400/50 text-[10px] font-bold text-purple-300 uppercase tracking-widest">
-                  Mestre Pokémon
+                  Mestre de {activeServerData.name}
                 </div>
-                <h4 className="text-2xl font-black text-white">Red Master</h4>
-                <div className="text-xs font-semibold text-purple-300 mt-0.5">Guild: Elite Four</div>
+                <h4 className="text-2xl font-black text-white">{activeServerData.topPlayers.first.name}</h4>
+                <div className="text-xs font-semibold text-purple-300 mt-0.5">Guild: {activeServerData.topPlayers.first.guild}</div>
 
                 <div className="mt-5 pt-4 border-t border-purple-900/50 space-y-2.5 text-xs">
                   <div className="flex justify-between text-zinc-400">
                     <span>Nível:</span>
-                    <strong className="text-cyan-300 font-black text-sm">Level 465</strong>
+                    <strong className="text-cyan-300 font-black text-sm">Level {activeServerData.topPlayers.first.level}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
                     <span>Principal:</span>
-                    <strong className="text-purple-400 font-bold">Shiny Charizard</strong>
+                    <strong className="text-purple-400 font-bold">{activeServerData.topPlayers.first.pokemon}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
                     <span>PvP:</span>
-                    <strong className="text-blue-400 font-bold">389 Vitórias</strong>
+                    <strong className="text-blue-400 font-bold">{activeServerData.topPlayers.first.wins} Vitórias</strong>
                   </div>
                 </div>
               </div>
@@ -819,7 +1019,7 @@ export default function HomePage() {
                 <span className="text-3xl mb-1">🥉</span>
                 <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-purple-700 via-indigo-600 to-purple-900 p-1 shadow-lg shadow-purple-800/30">
                   <div className="w-full h-full rounded-full bg-[#0b081a] flex items-center justify-center text-2xl font-black text-purple-300">
-                    CY
+                    {activeServerData.topPlayers.third.initials}
                   </div>
                 </div>
                 <span className="absolute -bottom-2 px-2.5 py-0.5 rounded-full bg-purple-950 text-[10px] font-bold text-purple-300 uppercase tracking-wide border border-purple-800">
@@ -828,21 +1028,21 @@ export default function HomePage() {
               </div>
 
               <div className="w-full p-6 rounded-2xl bg-gradient-to-b from-[#0b081a] to-[#03050a] border border-purple-900/50 text-center shadow-lg pt-8">
-                <h4 className="text-lg font-bold text-white">Cynthia</h4>
-                <div className="text-xs font-semibold text-indigo-300 mt-0.5">Guild: Sinnoh Legends</div>
+                <h4 className="text-lg font-bold text-white">{activeServerData.topPlayers.third.name}</h4>
+                <div className="text-xs font-semibold text-indigo-300 mt-0.5">Guild: {activeServerData.topPlayers.third.guild}</div>
 
                 <div className="mt-4 pt-4 border-t border-purple-950 space-y-2 text-xs">
                   <div className="flex justify-between text-zinc-400">
                     <span>Nível:</span>
-                    <strong className="text-indigo-300 font-bold">Level 421</strong>
+                    <strong className="text-indigo-300 font-bold">Level {activeServerData.topPlayers.third.level}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
                     <span>Principal:</span>
-                    <strong className="text-purple-400 font-semibold">Garchomp</strong>
+                    <strong className="text-purple-400 font-semibold">{activeServerData.topPlayers.third.pokemon}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
                     <span>PvP:</span>
-                    <strong className="text-cyan-400 font-bold">284 Vitórias</strong>
+                    <strong className="text-cyan-400 font-bold">{activeServerData.topPlayers.third.wins} Vitórias</strong>
                   </div>
                 </div>
               </div>
@@ -850,76 +1050,38 @@ export default function HomePage() {
           </div>
 
           {/* ===================================================================== */}
-          {/* TABELA TOP 4 AO TOP 7                                                 */}
+          {/* TABELA TOP 4 AO TOP 7 - DINÂMICA                                      */}
           {/* ===================================================================== */}
           <div className="max-w-4xl mx-auto rounded-2xl bg-[#060914]/90 border border-purple-900/40 overflow-hidden shadow-xl shadow-black/80">
             <div className="px-6 py-4 border-b border-purple-950 flex items-center justify-between">
               <h4 className="text-sm font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" /> Outros Destaques do Ranking
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" /> Outros Destaques • Servidor {activeServerData.name}
               </h4>
               <span className="text-xs text-zinc-500">Atualizado a cada 1 hora</span>
             </div>
 
             <div className="divide-y divide-purple-950/60">
-              <div className="px-6 py-3.5 flex items-center justify-between hover:bg-purple-950/20 transition-colors text-xs">
-                <div className="flex items-center gap-4">
-                  <span className="w-6 font-bold text-indigo-400">#4</span>
-                  <div>
-                    <span className="font-bold text-white text-sm">Steven Stone</span>
-                    <span className="block text-[11px] text-zinc-400">Guild: Hoenn League</span>
+              {activeServerData.topPlayers.runnersUp.map((runner) => (
+                <div
+                  key={runner.rank}
+                  className="px-6 py-3.5 flex items-center justify-between hover:bg-purple-950/20 transition-colors text-xs"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="w-6 font-bold text-indigo-400">#{runner.rank}</span>
+                    <div>
+                      <span className="font-bold text-white text-sm">{runner.name}</span>
+                      <span className="block text-[11px] text-zinc-400">Guild: {runner.guild}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="hidden sm:inline text-zinc-400">{runner.pokemon}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-purple-950/80 border border-purple-800/60 text-cyan-300 font-bold">
+                      Lvl {runner.level}
+                    </span>
+                    <span className="text-cyan-400 font-semibold hidden sm:inline">{runner.wins} vitórias</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-6">
-                  <span className="hidden sm:inline text-zinc-400">Metagross</span>
-                  <span className="px-2.5 py-1 rounded-full bg-purple-950/80 border border-purple-800/60 text-cyan-300 font-bold">Lvl 412</span>
-                  <span className="text-cyan-400 font-semibold hidden sm:inline">265 vitórias</span>
-                </div>
-              </div>
-
-              <div className="px-6 py-3.5 flex items-center justify-between hover:bg-purple-950/20 transition-colors text-xs">
-                <div className="flex items-center gap-4">
-                  <span className="w-6 font-bold text-indigo-400">#5</span>
-                  <div>
-                    <span className="font-bold text-white text-sm">Lance Dragon</span>
-                    <span className="block text-[11px] text-zinc-400">Guild: Dragon Clan</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  <span className="hidden sm:inline text-zinc-400">Dragonite</span>
-                  <span className="px-2.5 py-1 rounded-full bg-purple-950/80 border border-purple-800/60 text-cyan-300 font-bold">Lvl 405</span>
-                  <span className="text-cyan-400 font-semibold hidden sm:inline">248 vitórias</span>
-                </div>
-              </div>
-
-              <div className="px-6 py-3.5 flex items-center justify-between hover:bg-purple-950/20 transition-colors text-xs">
-                <div className="flex items-center gap-4">
-                  <span className="w-6 font-bold text-indigo-400">#6</span>
-                  <div>
-                    <span className="font-bold text-white text-sm">Misty Cerulean</span>
-                    <span className="block text-[11px] text-zinc-400">Guild: Water Masters</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  <span className="hidden sm:inline text-zinc-400">Starmie</span>
-                  <span className="px-2.5 py-1 rounded-full bg-purple-950/80 border border-purple-800/60 text-cyan-300 font-bold">Lvl 398</span>
-                  <span className="text-cyan-400 font-semibold hidden sm:inline">230 vitórias</span>
-                </div>
-              </div>
-
-              <div className="px-6 py-3.5 flex items-center justify-between hover:bg-purple-950/20 transition-colors text-xs">
-                <div className="flex items-center gap-4">
-                  <span className="w-6 font-bold text-indigo-400">#7</span>
-                  <div>
-                    <span className="font-bold text-white text-sm">Brock Pewter</span>
-                    <span className="block text-[11px] text-zinc-400">Guild: Boulder Gym</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  <span className="hidden sm:inline text-zinc-400">Steelix</span>
-                  <span className="px-2.5 py-1 rounded-full bg-purple-950/80 border border-purple-800/60 text-cyan-300 font-bold">Lvl 391</span>
-                  <span className="text-cyan-400 font-semibold hidden sm:inline">215 vitórias</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
