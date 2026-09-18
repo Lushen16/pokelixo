@@ -157,6 +157,15 @@ export default function HomePage() {
   const [feedbackType, setFeedbackType] = useState<"success" | "error" | "warning">("success");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Estado de Confirmação de E-mail (Resend)
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState<boolean>(false);
+  const [verifyingAccount, setVerifyingAccount] = useState<string>("");
+  const [verifyingEmailMasked, setVerifyingEmailMasked] = useState<string>("");
+  const [verificationCodeInput, setVerificationCodeInput] = useState<string>("");
+  const [isSubmittingCode, setIsSubmittingCode] = useState<boolean>(false);
+  const [isResendingCode, setIsResendingCode] = useState<boolean>(false);
+  const [verificationFeedback, setVerificationFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
   // Formulário de Criação de Personagem (Dentro da Conta Logada)
   const [newCharName, setNewCharName] = useState<string>("");
   const [newCharServer, setNewCharServer] = useState<"valaria" | "orten" | "zertiros">("valaria");
@@ -220,10 +229,21 @@ export default function HomePage() {
         const data = await res.json();
 
         if (res.ok && data.success) {
-          setFeedbackType("success");
-          setFormFeedback(data.message || "Conta criada com sucesso! Faça login abaixo para acessar o painel e criar seu personagem.");
-          setAccountMode("login");
-          setAccountForm({ account: accountForm.account, email: "", password: "", confirmPassword: "", phone: "", referralCode: "" });
+          if (data.requiresVerification) {
+            setIsVerifyingEmail(true);
+            setVerifyingAccount(accountForm.account.trim());
+            setVerifyingEmailMasked(data.maskedEmail || accountForm.email);
+            setVerificationCodeInput("");
+            setVerificationFeedback({
+              type: "success",
+              message: data.message || "Código de confirmação enviado para seu e-mail!",
+            });
+          } else {
+            setFeedbackType("success");
+            setFormFeedback(data.message || "Conta criada com sucesso! Faça login para jogar.");
+            setAccountMode("login");
+            setAccountForm({ account: accountForm.account, email: "", password: "", confirmPassword: "", phone: "", referralCode: "" });
+          }
         } else {
           setFeedbackType("error");
           setFormFeedback(data.message || "Não foi possível criar a conta.");
@@ -247,8 +267,19 @@ export default function HomePage() {
           setUserCharacters(data.players || []);
           setFormFeedback(null);
         } else {
-          setFeedbackType("error");
-          setFormFeedback(data.message || "Conta ou senha incorretos.");
+          if (data.requiresVerification) {
+            setIsVerifyingEmail(true);
+            setVerifyingAccount(accountForm.account.trim());
+            setVerifyingEmailMasked(data.maskedEmail || "");
+            setVerificationCodeInput("");
+            setVerificationFeedback({
+              type: "error",
+              message: data.message,
+            });
+          } else {
+            setFeedbackType("error");
+            setFormFeedback(data.message || "Conta ou senha incorretos.");
+          }
         }
       }
     } catch {
@@ -256,6 +287,87 @@ export default function HomePage() {
       setFormFeedback("Erro de conexão ao tentar se comunicar com o servidor.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Submissão do Código de Confirmação de E-mail (Resend)
+  const handleVerifyEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationCodeInput.trim()) {
+      setVerificationFeedback({ type: "error", message: "Digite o código de 6 dígitos recebido por e-mail." });
+      return;
+    }
+
+    setIsSubmittingCode(true);
+    setVerificationFeedback(null);
+
+    try {
+      const res = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account: verifyingAccount,
+          code: verificationCodeInput.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setIsVerifyingEmail(false);
+        setAccountMode("login");
+        setAccountForm((prev) => ({ ...prev, account: verifyingAccount, password: "" }));
+        setFeedbackType("success");
+        setFormFeedback("E-mail confirmado com sucesso! Digite sua senha para entrar na conta.");
+      } else {
+        setVerificationFeedback({
+          type: "error",
+          message: data.message || "Código inválido ou expirado.",
+        });
+      }
+    } catch {
+      setVerificationFeedback({
+        type: "error",
+        message: "Erro de conexão ao verificar o código.",
+      });
+    } finally {
+      setIsSubmittingCode(false);
+    }
+  };
+
+  // Reenvio do Código de Confirmação
+  const handleResendCode = async () => {
+    if (!verifyingAccount) return;
+    setIsResendingCode(true);
+    setVerificationFeedback(null);
+
+    try {
+      const res = await fetch("/api/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account: verifyingAccount }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setVerificationFeedback({
+          type: "success",
+          message: data.message || "Novo código enviado para seu e-mail!",
+        });
+      } else {
+        setVerificationFeedback({
+          type: "error",
+          message: data.message || "Não foi possível reenviar o código.",
+        });
+      }
+    } catch {
+      setVerificationFeedback({
+        type: "error",
+        message: "Erro de conexão ao solicitar novo código.",
+      });
+    } finally {
+      setIsResendingCode(false);
     }
   };
 
@@ -318,6 +430,8 @@ export default function HomePage() {
     setAccountForm({ account: "", email: "", password: "", confirmPassword: "", phone: "", referralCode: "" });
     setFormFeedback(null);
     setCharFeedback(null);
+    setIsVerifyingEmail(false);
+    setVerificationFeedback(null);
     setAccountMode("login");
   };
 
@@ -1035,150 +1149,244 @@ export default function HomePage() {
             /* CASO 2: USUÁRIO DESLOGADO - FORMULÁRIO DE CONTA COM ESCOLHA DE INICIAL*/
             /* ===================================================================== */
             <div className="bg-[#070b16]/90 border border-purple-900/50 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-black/80 backdrop-blur-md max-w-xl mx-auto">
-              {/* Abas Criar Conta / Entrar */}
-              <div className="flex rounded-xl bg-[#020409] p-1.5 border border-purple-950 mb-8">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccountMode("register");
-                    setFormFeedback(null);
-                  }}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                    accountMode === "register"
-                      ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-950/40"
-                      : "text-zinc-400 hover:text-white"
-                  }`}
-                >
-                  Criar Nova Conta
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccountMode("login");
-                    setFormFeedback(null);
-                  }}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                    accountMode === "login"
-                      ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-950/40"
-                      : "text-zinc-400 hover:text-white"
-                  }`}
-                >
-                  Entrar na Conta
-                </button>
-              </div>
-
-              {/* Mensagem de Feedback Dinâmica */}
-              {formFeedback && (
-                <div
-                  className={`mb-6 p-4 rounded-xl border text-sm flex items-start gap-3 transition-all ${
-                    feedbackType === "success"
-                      ? "bg-emerald-950/70 border-emerald-500/40 text-emerald-300"
-                      : feedbackType === "warning"
-                      ? "bg-amber-950/70 border-amber-500/40 text-amber-300"
-                      : "bg-red-950/70 border-red-500/40 text-red-300"
-                  }`}
-                >
-                  <span className="text-base shrink-0">
-                    {feedbackType === "success" ? "✓" : feedbackType === "warning" ? "⚠️" : "✕"}
-                  </span>
-                  <span className="leading-relaxed">{formFeedback}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleAccountSubmit} className="space-y-4">
+              {isVerifyingEmail ? (
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                    Nome da Conta (Username)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: AshKetchum"
-                    value={accountForm.account}
-                    onChange={(e) => setAccountForm({ ...accountForm, account: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
-                  />
-                </div>
-
-                {accountMode === "register" && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                        E-mail do Treinador
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="treinador@exemplo.com"
-                        value={accountForm.email}
-                        onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
-                      />
+                  {/* Cabeçalho da Confirmação de E-mail */}
+                  <div className="text-center mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-purple-950/70 border border-purple-800/80 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-900/40 text-3xl">
+                      📨
                     </div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Verificação de E-mail</span>
+                    <h3 className="text-2xl sm:text-3xl font-black text-white mt-1">Confirme sua Conta</h3>
+                    <p className="text-zinc-400 text-xs sm:text-sm mt-2 max-w-md mx-auto leading-relaxed">
+                      Enviamos um código de 6 dígitos para o e-mail de <strong className="text-white">{verifyingAccount}</strong>
+                      {verifyingEmailMasked ? ` (${verifyingEmailMasked})` : ""}. Insira o código abaixo para ativar sua conta:
+                    </p>
+                  </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                        Telefone para Contato (WhatsApp)
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="(11) 98765-4321"
-                        value={accountForm.phone}
-                        onChange={(e) => setAccountForm({ ...accountForm, phone: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
-                      />
+                  {/* Feedback da Verificação */}
+                  {verificationFeedback && (
+                    <div
+                      className={`mb-6 p-4 rounded-xl border text-sm flex items-start gap-3 transition-all ${
+                        verificationFeedback.type === "success"
+                          ? "bg-emerald-950/70 border-emerald-500/40 text-emerald-300"
+                          : "bg-red-950/70 border-red-500/40 text-red-300"
+                      }`}
+                    >
+                      <span className="text-base shrink-0">
+                        {verificationFeedback.type === "success" ? "✓" : "✕"}
+                      </span>
+                      <span className="leading-relaxed">{verificationFeedback.message}</span>
                     </div>
+                  )}
 
+                  <form onSubmit={handleVerifyEmailSubmit} className="space-y-5">
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                          Código de Referência
-                        </label>
-                        <span className="text-[11px] text-zinc-500 font-medium">(Opcional)</span>
-                      </div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2 text-center">
+                        Digite o Código de 6 Dígitos
+                      </label>
                       <input
                         type="text"
-                        placeholder="Ex: AMIGO123 ou POKE2026"
-                        value={accountForm.referralCode}
-                        onChange={(e) => setAccountForm({ ...accountForm, referralCode: e.target.value.toUpperCase() })}
-                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all uppercase tracking-wider font-mono"
+                        required
+                        maxLength={6}
+                        autoFocus
+                        placeholder="000000"
+                        value={verificationCodeInput}
+                        onChange={(e) => setVerificationCodeInput(e.target.value.replace(/\D/g, ""))}
+                        className="w-full text-center text-2xl sm:text-3xl tracking-[0.4em] font-mono font-black py-3.5 px-4 rounded-xl bg-[#03050a] border border-purple-900/60 text-cyan-300 placeholder-zinc-700 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/30 transition-all"
+                      />
+                      <span className="block text-[11px] text-zinc-500 text-center mt-2">
+                        Não encontrou? Verifique também a sua caixa de <strong>Spam / Lixo Eletrônico</strong>.
+                      </span>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmittingCode || verificationCodeInput.length < 6}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white font-bold text-sm uppercase tracking-wider shadow-lg shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingCode ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          <span>Ativando Conta...</span>
+                        </>
+                      ) : (
+                        "Confirmar E-mail & Ativar Conta"
+                      )}
+                    </button>
+
+                    <div className="pt-4 border-t border-purple-950 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={handleResendCode}
+                        disabled={isResendingCode}
+                        className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors disabled:opacity-50"
+                      >
+                        {isResendingCode ? "Reenviando..." : "Não recebi o código (Reenviar)"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsVerifyingEmail(false);
+                          setAccountMode("login");
+                          setFormFeedback(null);
+                        }}
+                        className="text-zinc-400 hover:text-zinc-200 transition-colors"
+                      >
+                        Voltar para o Login
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <>
+                  {/* Abas Criar Conta / Entrar */}
+                  <div className="flex rounded-xl bg-[#020409] p-1.5 border border-purple-950 mb-8">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccountMode("register");
+                        setFormFeedback(null);
+                      }}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        accountMode === "register"
+                          ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-950/40"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      Criar Nova Conta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccountMode("login");
+                        setFormFeedback(null);
+                      }}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        accountMode === "login"
+                          ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-950/40"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      Entrar na Conta
+                    </button>
+                  </div>
+
+                  {/* Mensagem de Feedback Dinâmica */}
+                  {formFeedback && (
+                    <div
+                      className={`mb-6 p-4 rounded-xl border text-sm flex items-start gap-3 transition-all ${
+                        feedbackType === "success"
+                          ? "bg-emerald-950/70 border-emerald-500/40 text-emerald-300"
+                          : feedbackType === "warning"
+                          ? "bg-amber-950/70 border-amber-500/40 text-amber-300"
+                          : "bg-red-950/70 border-red-500/40 text-red-300"
+                      }`}
+                    >
+                      <span className="text-base shrink-0">
+                        {feedbackType === "success" ? "✓" : feedbackType === "warning" ? "⚠️" : "✕"}
+                      </span>
+                      <span className="leading-relaxed">{formFeedback}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAccountSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                        Nome da Conta (Username)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: AshKetchum"
+                        value={accountForm.account}
+                        onChange={(e) => setAccountForm({ ...accountForm, account: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
                       />
                     </div>
-                  </>
-                )}
 
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                    Senha
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={accountForm.password}
-                    onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
-                  />
-                </div>
+                    {accountMode === "register" && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                            E-mail do Treinador
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="treinador@exemplo.com"
+                            value={accountForm.email}
+                            onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
+                            className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
+                          />
+                        </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white font-bold text-sm uppercase tracking-wider shadow-lg shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                      <span>Processando...</span>
-                    </>
-                  ) : accountMode === "register" ? (
-                    "Concluir Cadastro & Jogar"
-                  ) : (
-                    "Entrar no Painel"
-                  )}
-                </button>
-              </form>
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                            Telefone para Contato (WhatsApp)
+                          </label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="(11) 98765-4321"
+                            value={accountForm.phone}
+                            onChange={(e) => setAccountForm({ ...accountForm, phone: e.target.value })}
+                            className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                              Código de Referência
+                            </label>
+                            <span className="text-[11px] text-zinc-500 font-medium">(Opcional)</span>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Ex: AMIGO123 ou POKE2026"
+                            value={accountForm.referralCode}
+                            onChange={(e) => setAccountForm({ ...accountForm, referralCode: e.target.value.toUpperCase() })}
+                            className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all uppercase tracking-wider font-mono"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                        Senha
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={accountForm.password}
+                        onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white font-bold text-sm uppercase tracking-wider shadow-lg shadow-purple-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-60 disabled:pointer-events-none flex items-center justify-center gap-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          <span>Processando...</span>
+                        </>
+                      ) : accountMode === "register" ? (
+                        "Concluir Cadastro & Jogar"
+                      ) : (
+                        "Entrar no Painel"
+                      )}
+                    </button>
+                  </form>
+                </>
+              )}
             </div>
           )}
         </div>

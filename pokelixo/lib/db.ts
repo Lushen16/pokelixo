@@ -12,6 +12,9 @@ export interface MemoryAccount {
   email: string;
   phone?: string;
   referral_code?: string;
+  email_verified: boolean;
+  verification_code?: string;
+  verification_code_expires?: string;
   premdays: number;
   created_at: string;
 }
@@ -35,6 +38,7 @@ const memoryAccounts: MemoryAccount[] = [
     email: "admin@poketibia.com",
     phone: "(11) 99999-9999",
     referral_code: "MASTER",
+    email_verified: true,
     premdays: 30,
     created_at: new Date().toISOString(),
   },
@@ -70,7 +74,7 @@ export async function ensureTablesExist() {
   if (!sql) return;
 
   try {
-    // Tabela de Contas (apenas dados da conta com telefone e código de referência)
+    // Tabela de Contas (com telefone, código de indicação e verificação de e-mail)
     await sql`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
@@ -79,17 +83,29 @@ export async function ensureTablesExist() {
         email VARCHAR(255),
         phone VARCHAR(32),
         referral_code VARCHAR(64),
+        email_verified BOOLEAN DEFAULT FALSE,
+        verification_code VARCHAR(10),
+        verification_code_expires TIMESTAMP,
         premdays INT DEFAULT 3,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
-    // Garante que as colunas phone e referral_code existam caso a tabela já tenha sido criada anteriormente
+    // Garante que as colunas existam caso a tabela já tenha sido criada anteriormente
     await sql`
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS phone VARCHAR(32);
     `;
     await sql`
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS referral_code VARCHAR(64);
+    `;
+    await sql`
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+    `;
+    await sql`
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS verification_code VARCHAR(10);
+    `;
+    await sql`
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS verification_code_expires TIMESTAMP;
     `;
 
     // Tabela de Personagens (vinculados à conta, com servidor e inicial)
@@ -180,23 +196,26 @@ export async function findAccountByEmail(email: string) {
   return found || null;
 }
 
-// Cria uma nova conta (sem personagens ainda) com telefone e código de indicação
+// Cria uma nova conta (sem personagens ainda) com telefone, código de indicação e código de verificação
 export async function createAccount(data: {
   account: string;
   email: string;
   password: string;
   phone?: string;
   referralCode?: string;
+  verificationCode?: string;
 }) {
   const sql = getSqlClient();
   const hashedPassword = hashPassword(data.password);
+  const code = data.verificationCode || Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutos
 
   if (sql) {
     await ensureTablesExist();
     const result = await sql`
-      INSERT INTO accounts (name, password, email, phone, referral_code, premdays)
-      VALUES (${data.account}, ${hashedPassword}, ${data.email || ""}, ${data.phone || ""}, ${data.referralCode || ""}, 3)
-      RETURNING id, name, email, phone, referral_code, premdays, created_at;
+      INSERT INTO accounts (name, password, email, phone, referral_code, email_verified, verification_code, verification_code_expires, premdays)
+      VALUES (${data.account}, ${hashedPassword}, ${data.email || ""}, ${data.phone || ""}, ${data.referralCode || ""}, FALSE, ${code}, ${expiresAt.toISOString()}, 3)
+      RETURNING id, name, email, phone, referral_code, email_verified, verification_code, premdays, created_at;
     `;
     return result[0];
   }
@@ -209,11 +228,120 @@ export async function createAccount(data: {
     email: data.email || "",
     phone: data.phone || "",
     referral_code: data.referralCode || "",
+    email_verified: false,
+    verification_code: code,
+    verification_code_expires: expiresAt.toISOString(),
     premdays: 3,
     created_at: new Date().toISOString(),
   };
   memoryAccounts.push(newAccount);
   return newAccount;
+}
+
+// Verifica o código de 6 dígitos enviado por e-mail
+export async function verifyAccountCode(accountName: string, code: string): Promise<{ success: boolean; message: string }> {
+  const cleanCode = code.trim();
+  const sql = getSqlClient();
+
+  if (sql) {
+    await ensureTablesExist();
+    const rows = await sql`SELECT * FROM accounts WHERE LOWER(name) = LOWER(${accountName}) LIMIT 1`;
+    const acc = rows[0];
+    if (!acc) return { success: false, message: "Conta não encontrada." };
+
+    if (acc.email_verified) {
+      return { success: true, message: "Este e-mail já está confirmado! Você já pode entrar." };
+    }
+
+    if (acc.verification_code !== cleanCode) {
+      return { success: false, message: "Código de confirmação incorreto. Verifique sua caixa de entrada ou spam." };
+    }
+
+    if (acc.verification_code_expires && new Date() > new Date(acc.verification_code_expires)) {
+      return { success: false, message: "Este código expirou. Clique em 'Reenviar Código' para receber um novo." };
+    }
+
+    // Marca como verificado e limpa o código
+    await sql`
+      UPDATE accounts 
+      SET email_verified = TRUE, verification_code = NULL, verification_code_expires = NULL 
+      WHERE id = ${acc.id}
+    `;
+    return { success: true, message: "E-mail confirmado com sucesso! Agora você já pode entrar na sua conta." };
+  }
+
+  // Fallback para memória local
+  const acc = memoryAccounts.find((a) => a.name.toLowerCase() === accountName.toLowerCase());
+  if (!acc) return { success: false, message: "Conta não encontrada." };
+
+  if (acc.email_verified) {
+    return { success: true, message: "Este e-mail já está confirmado! Você já pode entrar." };
+  }
+
+  if (acc.verification_code !== cleanCode) {
+    return { success: false, message: "Código de confirmação incorreto. Verifique sua caixa de entrada ou spam." };
+  }
+
+  if (acc.verification_code_expires && new Date() > new Date(acc.verification_code_expires)) {
+    return { success: false, message: "Este código expirou. Clique em 'Reenviar Código' para receber um novo." };
+  }
+
+  acc.email_verified = true;
+  acc.verification_code = undefined;
+  acc.verification_code_expires = undefined;
+  return { success: true, message: "E-mail confirmado com sucesso! Agora você já pode entrar na sua conta." };
+}
+
+// Gera um novo código para reenvio
+export async function resendVerificationCode(accountName: string): Promise<{ success: boolean; email?: string; accountName?: string; newCode?: string; message: string }> {
+  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const sql = getSqlClient();
+
+  if (sql) {
+    await ensureTablesExist();
+    const rows = await sql`SELECT * FROM accounts WHERE LOWER(name) = LOWER(${accountName}) LIMIT 1`;
+    const acc = rows[0];
+    if (!acc) return { success: false, message: "Conta não encontrada." };
+    if (!acc.email) return { success: false, message: "Esta conta não possui e-mail cadastrado." };
+
+    if (acc.email_verified) {
+      return { success: false, message: "Sua conta já está confirmada! Não é necessário outro código." };
+    }
+
+    await sql`
+      UPDATE accounts 
+      SET verification_code = ${newCode}, verification_code_expires = ${expiresAt.toISOString()} 
+      WHERE id = ${acc.id}
+    `;
+
+    return {
+      success: true,
+      email: acc.email,
+      accountName: acc.name,
+      newCode,
+      message: "Novo código gerado com sucesso.",
+    };
+  }
+
+  const acc = memoryAccounts.find((a) => a.name.toLowerCase() === accountName.toLowerCase());
+  if (!acc) return { success: false, message: "Conta não encontrada." };
+  if (!acc.email) return { success: false, message: "Esta conta não possui e-mail cadastrado." };
+
+  if (acc.email_verified) {
+    return { success: false, message: "Sua conta já está confirmada! Não é necessário outro código." };
+  }
+
+  acc.verification_code = newCode;
+  acc.verification_code_expires = expiresAt.toISOString();
+
+  return {
+    success: true,
+    email: acc.email,
+    accountName: acc.name,
+    newCode,
+    message: "Novo código gerado com sucesso.",
+  };
 }
 
 // Autentica login

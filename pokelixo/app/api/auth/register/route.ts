@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findAccountByName, findAccountByEmail, createAccount } from "@/lib/db";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,17 +57,43 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Cria a conta no banco de dados com telefone e código de referência
+    // 3. Gera código de verificação de 6 dígitos
+    const cleanEmail = email ? String(email).trim() : "";
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 4. Cria a conta no banco de dados com telefone, código de indicação e código de verificação
     const newAccount = await createAccount({
       account: trimmedAccount,
-      email: email ? String(email).trim() : "",
+      email: cleanEmail,
       password: String(password),
       phone: phone ? String(phone).trim() : "",
       referralCode: referralCode ? String(referralCode).trim() : "",
+      verificationCode,
     });
+
+    // 5. Dispara o e-mail de confirmação via Resend
+    let emailResult: { success: boolean; error?: string; devMode?: boolean } = { success: false, devMode: false };
+    if (cleanEmail) {
+      emailResult = await sendVerificationEmail({
+        to: cleanEmail,
+        accountName: trimmedAccount,
+        code: verificationCode,
+      });
+    }
+
+    let maskedEmail = "";
+    if (cleanEmail) {
+      const parts = cleanEmail.split("@");
+      const user = parts[0] || "";
+      const domain = parts[1] || "";
+      maskedEmail = user.length > 2 
+        ? `${user.slice(0, 2)}${"*".repeat(Math.max(1, user.length - 2))}@${domain}`
+        : `${user}*@${domain}`;
+    }
 
     return NextResponse.json({
       success: true,
+      requiresVerification: true,
       account: {
         id: newAccount.id,
         name: newAccount.name,
@@ -74,7 +101,11 @@ export async function POST(req: NextRequest) {
         phone: newAccount.phone,
         premdays: newAccount.premdays,
       },
-      message: `Conta "${trimmedAccount}" criada com sucesso! Faça login para criar seu personagem, escolher seu servidor e seu Pokémon inicial.`,
+      maskedEmail,
+      devMode: emailResult.devMode,
+      message: cleanEmail
+        ? `Conta criada! Enviamos um código de confirmação de 6 dígitos para ${maskedEmail}. Insira-o abaixo para ativar sua conta.`
+        : `Conta "${trimmedAccount}" criada com sucesso!`,
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : "Erro desconhecido";
