@@ -449,7 +449,7 @@ export default function HomePage() {
             </div>
             <div>
               <span className="text-xl font-black tracking-wider uppercase bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent">
-                PokéTibia
+                PokéWorld
               </span>
               <span className="block text-[10px] tracking-widest text-indigo-300 font-semibold uppercase">
                 Online MMORPG
@@ -649,7 +649,7 @@ export default function HomePage() {
             <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white leading-tight">
               O Maior Servidor de{" "}
               <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent">
-                PokéTibia
+                PokéWorld
               </span>{" "}
               do Brasil
             </h1>
@@ -1401,7 +1401,7 @@ export default function HomePage() {
             <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Comece a Jogar</span>
             <h2 className="text-3xl sm:text-4xl font-black text-white mt-2">Download do Cliente</h2>
             <p className="text-zinc-400 max-w-xl mx-auto mt-2 text-sm">
-              Baixe o cliente oficial do PokéTibia para computador Windows e jogue gratuitamente com alto desempenho.
+              Baixe o cliente oficial do PokéWorld para computador Windows e jogue gratuitamente com alto desempenho.
             </p>
           </div>
 
@@ -1475,7 +1475,7 @@ export default function HomePage() {
             <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Hall da Fama</span>
             <h2 className="text-3xl sm:text-5xl font-black text-white mt-2">Pódio dos Melhores Treinadores</h2>
             <p className="text-zinc-400 max-w-xl mx-auto mt-3 text-sm">
-              Os maiores mestres de PokéTibia por servidor. Escolha o mundo para ver a liderança da temporada!
+              Os maiores mestres de PokéWorld por servidor. Escolha o mundo para ver a liderança da temporada!
             </p>
 
             {/* Seletor de Servidor para o Ranking (Sem tags PvP / Non-PvP) */}
@@ -1679,7 +1679,7 @@ export default function HomePage() {
       <footer className="border-t border-purple-950/60 bg-[#020307] py-10 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-zinc-500">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-zinc-300">PokéTibia MMORPG</span>
+            <span className="font-bold text-zinc-300">PokéWorld MMORPG</span>
             <span>•</span>
             <span>© 2026 Todos os direitos reservados.</span>
           </div>

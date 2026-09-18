@@ -35,7 +35,7 @@ const memoryAccounts: MemoryAccount[] = [
     id: 1,
     name: "admin",
     password: hashPassword("admin"),
-    email: "admin@poketibia.com",
+    email: "admin@pokeworld.com",
     phone: "(11) 99999-9999",
     referral_code: "MASTER",
     email_verified: true,

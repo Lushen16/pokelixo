@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PokéTibia Online - O Melhor Servidor MMORPG",
-  description: "Crie sua conta, baixe o cliente e explore um mundo Pokémon incrível no PokéTibia! Torneios, Quests e Batalhas Épicas.",
+  title: "PokéWorld Online - O Melhor Servidor MMORPG",
+  description: "Crie sua conta, baixe o cliente e explore um mundo Pokémon incrível no PokéWorld! Torneios, Quests e Batalhas Épicas com a temática Master Ball.",
   icons: {
     icon: "/masterball.svg",
     shortcut: "/masterball.svg",
