@@ -10,6 +10,8 @@ export interface MemoryAccount {
   name: string;
   password: string;
   email: string;
+  phone?: string;
+  referral_code?: string;
   premdays: number;
   created_at: string;
 }
@@ -31,6 +33,8 @@ const memoryAccounts: MemoryAccount[] = [
     name: "admin",
     password: hashPassword("admin"),
     email: "admin@poketibia.com",
+    phone: "(11) 99999-9999",
+    referral_code: "MASTER",
     premdays: 30,
     created_at: new Date().toISOString(),
   },
@@ -66,16 +70,26 @@ export async function ensureTablesExist() {
   if (!sql) return;
 
   try {
-    // Tabela de Contas (apenas dados da conta)
+    // Tabela de Contas (apenas dados da conta com telefone e código de referência)
     await sql`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
         name VARCHAR(32) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         email VARCHAR(255),
+        phone VARCHAR(32),
+        referral_code VARCHAR(64),
         premdays INT DEFAULT 3,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `;
+
+    // Garante que as colunas phone e referral_code existam caso a tabela já tenha sido criada anteriormente
+    await sql`
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS phone VARCHAR(32);
+    `;
+    await sql`
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS referral_code VARCHAR(64);
     `;
 
     // Tabela de Personagens (vinculados à conta, com servidor e inicial)
@@ -166,11 +180,13 @@ export async function findAccountByEmail(email: string) {
   return found || null;
 }
 
-// Cria uma nova conta (sem personagens ainda)
+// Cria uma nova conta (sem personagens ainda) com telefone e código de indicação
 export async function createAccount(data: {
   account: string;
   email: string;
   password: string;
+  phone?: string;
+  referralCode?: string;
 }) {
   const sql = getSqlClient();
   const hashedPassword = hashPassword(data.password);
@@ -178,9 +194,9 @@ export async function createAccount(data: {
   if (sql) {
     await ensureTablesExist();
     const result = await sql`
-      INSERT INTO accounts (name, password, email, premdays)
-      VALUES (${data.account}, ${hashedPassword}, ${data.email || ""}, 3)
-      RETURNING id, name, email, premdays, created_at;
+      INSERT INTO accounts (name, password, email, phone, referral_code, premdays)
+      VALUES (${data.account}, ${hashedPassword}, ${data.email || ""}, ${data.phone || ""}, ${data.referralCode || ""}, 3)
+      RETURNING id, name, email, phone, referral_code, premdays, created_at;
     `;
     return result[0];
   }
@@ -191,6 +207,8 @@ export async function createAccount(data: {
     name: data.account,
     password: hashedPassword,
     email: data.email || "",
+    phone: data.phone || "",
+    referral_code: data.referralCode || "",
     premdays: 3,
     created_at: new Date().toISOString(),
   };

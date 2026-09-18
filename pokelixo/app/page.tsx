@@ -52,10 +52,8 @@ const STARTER_POKEMON: StarterPokemon[] = [
 interface GameServer {
   id: "valaria" | "orten" | "zertiros";
   name: string;
-  type: string;
   online: number;
   description: string;
-  pvpType: "Open PvP" | "PvP-Enforced" | "No-PvP (RPG)";
   topPlayers: {
     first: { name: string; initials: string; guild: string; level: number; pokemon: string; wins: number };
     second: { name: string; initials: string; guild: string; level: number; pokemon: string; wins: number };
@@ -68,10 +66,8 @@ const SERVERS: Record<"valaria" | "orten" | "zertiros", GameServer> = {
   valaria: {
     id: "valaria",
     name: "Valaria",
-    type: "Open PvP",
     online: 412,
-    description: "Servidor Principal • Guerras de Guildas e Torneios Diários",
-    pvpType: "Open PvP",
+    description: "Servidor Principal • Guerras de Guildas, Ginásios e Torneios Diários",
     topPlayers: {
       first: { name: "Red Master", initials: "RM", guild: "Elite Four", level: 465, pokemon: "Shiny Charizard", wins: 389 },
       second: { name: "Blue Oak", initials: "BO", guild: "Pallet Champions", level: 438, pokemon: "Shiny Blastoise", wins: 312 },
@@ -87,10 +83,8 @@ const SERVERS: Record<"valaria" | "orten" | "zertiros", GameServer> = {
   orten: {
     id: "orten",
     name: "Orten",
-    type: "PvP-Enforced",
     online: 285,
-    description: "Servidor Hardcore • Batalhas Frequentes e Foco em PvP",
-    pvpType: "PvP-Enforced",
+    description: "Servidor Desafiador • Batalhas Frequentes, Dungeons e Chefões",
     topPlayers: {
       first: { name: "Gabigordo", initials: "SEILA", guild: "Dark Vanguard", level: 452, pokemon: "Shiny Gengar", wins: 410 },
       second: { name: "Garibal", initials: "Tranquiilo", guild: "Kanto Elite", level: 440, pokemon: "Arcanine", wins: 335 },
@@ -106,10 +100,8 @@ const SERVERS: Record<"valaria" | "orten" | "zertiros", GameServer> = {
   zertiros: {
     id: "zertiros",
     name: "Zertiros",
-    type: "No-PvP (RPG)",
     online: 340,
-    description: "Servidor Cooperativo • Quests Lendárias, Puzzles e Caçadas",
-    pvpType: "No-PvP (RPG)",
+    description: "Servidor Clássico • Quests Lendárias, Puzzles e Caçadas",
     topPlayers: {
       first: { name: "Aurora Trainer", initials: "AT", guild: "Mystic Guardians", level: 448, pokemon: "Shiny Gardevoir", wins: 260 },
       second: { name: "Wallace Ocean", initials: "WO", guild: "Sootopolis Clan", level: 435, pokemon: "Milotic", wins: 245 },
@@ -147,29 +139,33 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountMode, setAccountMode] = useState<"register" | "login">("register");
   const [selectedServer, setSelectedServer] = useState<"valaria" | "orten" | "zertiros">("valaria");
-  const [selectedStarterId, setSelectedStarterId] = useState<string>("charmander");
-  const [isStarterMenuOpen, setIsStarterMenuOpen] = useState<boolean>(false);
-  const [starterGenFilter, setStarterGenFilter] = useState<number | "all">("all");
 
   // Sessão do Usuário Logado
   const [currentUser, setCurrentUser] = useState<LoggedInAccount | null>(null);
   const [userCharacters, setUserCharacters] = useState<CharacterPlayer[]>([]);
 
   // Formulário de Conta (Cadastro / Login)
-  const [accountForm, setAccountForm] = useState({ account: "", email: "", password: "", confirmPassword: "" });
+  const [accountForm, setAccountForm] = useState({
+    account: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    phone: "",
+    referralCode: "",
+  });
   const [formFeedback, setFormFeedback] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<"success" | "error" | "warning">("success");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Formulário de Criação de Personagem Adicional (Dentro da Conta)
+  // Formulário de Criação de Personagem (Dentro da Conta Logada)
   const [newCharName, setNewCharName] = useState<string>("");
   const [newCharServer, setNewCharServer] = useState<"valaria" | "orten" | "zertiros">("valaria");
   const [newCharStarterId, setNewCharStarterId] = useState<string>("charmander");
+  const [newCharGenFilter, setNewCharGenFilter] = useState<number | "all">("all");
   const [isNewCharStarterOpen, setIsNewCharStarterOpen] = useState<boolean>(false);
   const [charFeedback, setCharFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [isCreatingChar, setIsCreatingChar] = useState<boolean>(false);
 
-  const currentStarter = STARTER_POKEMON.find((p) => p.id === selectedStarterId) || STARTER_POKEMON[1];
   const newCharCurrentStarter = STARTER_POKEMON.find((p) => p.id === newCharStarterId) || STARTER_POKEMON[1];
   const activeServerData = SERVERS[selectedServer];
 
@@ -190,10 +186,18 @@ export default function HomePage() {
       return;
     }
 
-    if (accountMode === "register" && accountForm.confirmPassword && accountForm.password !== accountForm.confirmPassword) {
-      setFeedbackType("error");
-      setFormFeedback("As senhas digitadas não coincidem.");
-      return;
+    if (accountMode === "register") {
+      if (!accountForm.phone.trim()) {
+        setFeedbackType("error");
+        setFormFeedback("Por favor, informe seu número de telefone/WhatsApp para contato.");
+        return;
+      }
+
+      if (accountForm.confirmPassword && accountForm.password !== accountForm.confirmPassword) {
+        setFeedbackType("error");
+        setFormFeedback("As senhas digitadas não coincidem.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -208,8 +212,8 @@ export default function HomePage() {
             account: accountForm.account,
             email: accountForm.email,
             password: accountForm.password,
-            server: selectedServer,
-            starterPokemon: currentStarter.name,
+            phone: accountForm.phone,
+            referralCode: accountForm.referralCode,
           }),
         });
 
@@ -217,9 +221,9 @@ export default function HomePage() {
 
         if (res.ok && data.success) {
           setFeedbackType("success");
-          setFormFeedback(data.message || "Conta criada com sucesso! Faça login abaixo para acessar o painel.");
+          setFormFeedback(data.message || "Conta criada com sucesso! Faça login abaixo para acessar o painel e criar seu personagem.");
           setAccountMode("login");
-          setAccountForm({ account: accountForm.account, email: "", password: "", confirmPassword: "" });
+          setAccountForm({ account: accountForm.account, email: "", password: "", confirmPassword: "", phone: "", referralCode: "" });
         } else {
           setFeedbackType("error");
           setFormFeedback(data.message || "Não foi possível criar a conta.");
@@ -311,7 +315,7 @@ export default function HomePage() {
   const handleLogout = () => {
     setCurrentUser(null);
     setUserCharacters([]);
-    setAccountForm({ account: "", email: "", password: "", confirmPassword: "" });
+    setAccountForm({ account: "", email: "", password: "", confirmPassword: "", phone: "", referralCode: "" });
     setFormFeedback(null);
     setCharFeedback(null);
     setAccountMode("login");
@@ -320,22 +324,14 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#030509] text-zinc-100 selection:bg-purple-600 selection:text-white">
       {/* ========================================================================= */}
-      {/* 1. CABEÇALHO / NAVBAR (PALETA: ROXO, AZUL E PRETO)                         */}
+      {/* 1. CABEÇALHO / NAVBAR                                                     */}
       {/* ========================================================================= */}
       <header className="sticky top-0 z-50 w-full border-b border-purple-900/40 bg-[#030509]/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           {/* Logo & Marca (Estilo Master Ball / Místico) */}
           <a href="#home" className="flex items-center gap-3 group">
-            <div className="relative w-11 h-11 rounded-full bg-gradient-to-b from-purple-500 via-indigo-600 to-blue-500 p-[2px] shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full rounded-full bg-[#070a14] flex items-center justify-center relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-1/2 bg-gradient-to-r from-purple-600 to-indigo-700" />
-                <div className="absolute top-1 left-1.5 w-2 h-2 rounded-full bg-blue-400/80 blur-[0.5px]" />
-                <div className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-blue-400/80 blur-[0.5px]" />
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[3px] bg-black z-10" />
-                <div className="relative z-20 w-3.5 h-3.5 rounded-full bg-zinc-950 border-2 border-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)] flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                </div>
-              </div>
+            <div className="relative w-11 h-11 rounded-full bg-gradient-to-b from-purple-500 via-indigo-600 to-blue-500 p-[2px] shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform overflow-hidden">
+              <img src="/masterball.svg" alt="Master Ball" className="w-full h-full object-contain" />
             </div>
             <div>
               <span className="text-xl font-black tracking-wider uppercase bg-gradient-to-r from-purple-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent">
@@ -533,7 +529,7 @@ export default function HomePage() {
               <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white text-[10px] font-bold uppercase tracking-wider">
                 Temporada 2026
               </span>
-              <span className="text-zinc-300">Novas Quests, Pokémons Shiny & Sistema de Torneios!</span>
+              <span className="text-zinc-300">Valaria, Orten e Zertiros: Escolha o seu mundo e jogue agora!</span>
             </div>
 
             <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white leading-tight">
@@ -629,7 +625,7 @@ export default function HomePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Torneios PvP & Clãs</h3>
+              <h3 className="text-xl font-bold text-white mb-2">Torneios & Clãs</h3>
               <p className="text-sm text-zinc-400 leading-relaxed">
                 Participe de ligas semanais com sistema de ELO, guerras de territórios e guildas de treinadores competitivos.
               </p>
@@ -639,7 +635,7 @@ export default function HomePage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. SEÇÃO: MINHA CONTA / PAINEL (PALETA: ROXO, AZUL E PRETO)               */}
+      {/* 3. SEÇÃO: MINHA CONTA / PAINEL                                            */}
       {/* ========================================================================= */}
       <section id="minha-conta" className="py-20 bg-[#04060d] border-t border-purple-950/60 relative">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -729,7 +725,7 @@ export default function HomePage() {
                             }`}
                           >
                             <span className={`w-2 h-2 rounded-full ${hasChar ? "bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-zinc-700"}`} />
-                            <span className="capitalize">{srv.name} ({srv.pvpType})</span>
+                            <span className="capitalize">{srv.name}</span>
                             <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${hasChar ? "bg-cyan-950 text-cyan-300 font-bold" : "bg-zinc-900 text-zinc-600"}`}>
                               {count} {count === 1 ? "char" : "chars"}
                             </span>
@@ -880,7 +876,7 @@ export default function HomePage() {
                               }`}
                             >
                               <span className="block text-xs font-bold text-white capitalize">{srv.name}</span>
-                              <span className="block text-[9px] text-cyan-300 font-semibold">{srv.pvpType}</span>
+                              <span className="block text-[10px] text-zinc-400 mt-0.5">{srv.online} on</span>
                             </button>
                           );
                         })}
@@ -893,7 +889,6 @@ export default function HomePage() {
                         <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
                           Pokémon Inicial (Gen 1 ao 7)
                         </label>
-                        <span className="text-[10px] text-cyan-400 font-medium">21 Opções com Foto</span>
                       </div>
 
                       <button
@@ -932,19 +927,50 @@ export default function HomePage() {
                         </div>
                       </button>
 
-                      {/* Dropdown com os 21 Iniciais com Fotos */}
+                      {/* Dropdown com os Iniciais com Fotos */}
                       {isNewCharStarterOpen && (
                         <div className="mt-2 rounded-2xl bg-[#040712] border border-purple-800/80 p-3 shadow-2xl animate-in fade-in duration-200">
+                          {/* Filtros de Geração */}
+                          <div className="flex items-center gap-1 overflow-x-auto pb-2 mb-2.5 border-b border-purple-950 text-xs no-scrollbar">
+                            <button
+                              type="button"
+                              onClick={() => setNewCharGenFilter("all")}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
+                                newCharGenFilter === "all"
+                                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow"
+                                  : "bg-[#03050a] text-zinc-400 hover:text-white border border-purple-950"
+                              }`}
+                            >
+                              Todas
+                            </button>
+                            {[1, 2, 3, 4, 5, 6, 7].map((gen) => (
+                              <button
+                                key={gen}
+                                type="button"
+                                onClick={() => setNewCharGenFilter(gen)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
+                                  newCharGenFilter === gen
+                                    ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow"
+                                    : "bg-[#03050a] text-zinc-400 hover:text-white border border-purple-950"
+                                }`}
+                              >
+                                Gen {gen}
+                              </button>
+                            ))}
+                          </div>
+
                           {/* Grid dos Iniciais */}
                           <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                            {[1, 2, 3, 4, 5, 6, 7].map((gen) => {
-                              const genStarters = STARTER_POKEMON.filter((p) => p.gen === gen);
-                              return (
-                                <div key={gen}>
-                                  <span className="text-[10px] font-bold text-indigo-300 uppercase px-1">
-                                    {gen}ª Gen ({genStarters[0]?.region})
-                                  </span>
-                                  <div className="grid grid-cols-3 gap-1.5 mt-1">
+                            {[1, 2, 3, 4, 5, 6, 7]
+                              .filter((gen) => newCharGenFilter === "all" || newCharGenFilter === gen)
+                              .map((gen) => {
+                                const genStarters = STARTER_POKEMON.filter((p) => p.gen === gen);
+                                return (
+                                  <div key={gen}>
+                                    <span className="text-[10px] font-bold text-indigo-300 uppercase px-1">
+                                      {gen}ª Gen ({genStarters[0]?.region})
+                                    </span>
+                                    <div className="grid grid-cols-3 gap-1.5 mt-1">
                                     {genStarters.map((pokemon) => {
                                       const isSelected = newCharStarterId === pokemon.id;
                                       return (
@@ -1059,44 +1085,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              <form onSubmit={handleAccountSubmit} className="space-y-5">
-                {/* Escolha do Servidor / Mundo (Valaria, Orten, Zertiros) */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                      Selecione o Servidor / Mundo
-                    </label>
-                    <span className="text-[11px] text-cyan-400 font-semibold">
-                      {activeServerData.name} ({activeServerData.pvpType})
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {(["valaria", "orten", "zertiros"] as const).map((srvKey) => {
-                      const srv = SERVERS[srvKey];
-                      const isSelected = selectedServer === srvKey;
-                      return (
-                        <button
-                          key={srvKey}
-                          type="button"
-                          onClick={() => setSelectedServer(srvKey)}
-                          className={`p-3 rounded-xl border text-left transition-all relative ${
-                            isSelected
-                              ? "border-cyan-400 bg-purple-950/70 ring-2 ring-cyan-400/40 text-white shadow-lg shadow-purple-900/30"
-                              : "border-purple-950 bg-[#03050a] text-zinc-400 hover:border-purple-800 hover:text-zinc-200"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-bold text-white">{srv.name}</span>
-                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                          </div>
-                          <span className="block text-[10px] text-cyan-300 font-semibold">{srv.pvpType}</span>
-                          <span className="block text-[10px] text-zinc-400 mt-0.5">{srv.online} online</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
+              <form onSubmit={handleAccountSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                     Nome da Conta (Username)
@@ -1112,19 +1101,51 @@ export default function HomePage() {
                 </div>
 
                 {accountMode === "register" && (
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                      E-mail do Treinador
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="treinador@exemplo.com"
-                      value={accountForm.email}
-                      onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                        E-mail do Treinador
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="treinador@exemplo.com"
+                        value={accountForm.email}
+                        onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                        Telefone para Contato (WhatsApp)
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="(11) 98765-4321"
+                        value={accountForm.phone}
+                        onChange={(e) => setAccountForm({ ...accountForm, phone: e.target.value })}
+                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          Código de Referência
+                        </label>
+                        <span className="text-[11px] text-zinc-500 font-medium">(Opcional)</span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Ex: AMIGO123 ou POKE2026"
+                        value={accountForm.referralCode}
+                        onChange={(e) => setAccountForm({ ...accountForm, referralCode: e.target.value.toUpperCase() })}
+                        className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all uppercase tracking-wider font-mono"
+                      />
+                    </div>
+                  </>
                 )}
 
                 <div>
@@ -1140,184 +1161,6 @@ export default function HomePage() {
                     className="w-full px-4 py-3 rounded-xl bg-[#03050a] border border-purple-900/50 text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all"
                   />
                 </div>
-
-                {/* Escolha do Pokémon Inicial ao Registrar (Com Fotos Oficiais e Símbolo do Elemento) */}
-                {accountMode === "register" && (
-                  <div className="relative">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                        Escolha seu Pokémon Inicial (1ª à 7ª Geração)
-                      </label>
-                      <span className="text-[11px] text-cyan-400 font-medium">21 Iniciais com Foto</span>
-                    </div>
-
-                    {/* Barra / Aba de Texto que abre e fecha com Foto do Inicial */}
-                    <button
-                      type="button"
-                      onClick={() => setIsStarterMenuOpen(!isStarterMenuOpen)}
-                      className="w-full px-4 py-3.5 rounded-xl bg-[#03050a] border border-purple-900/60 hover:border-cyan-400/80 text-left flex items-center justify-between transition-all group focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        {/* FOTO DO POKÉMON ATUAL */}
-                        <div className="w-12 h-12 rounded-xl bg-purple-950/60 border border-purple-800/60 p-1 flex items-center justify-center shadow-inner overflow-hidden shrink-0">
-                          <img
-                            src={currentStarter.image}
-                            alt={currentStarter.name}
-                            className="w-full h-full object-contain drop-shadow group-hover:scale-105 transition-transform"
-                          />
-                        </div>
-                        <div>
-                          {/* SÍMBOLO PEQUENO DO ELEMENTO NA FRENTE DO NOME */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-white font-bold text-sm group-hover:text-cyan-300 transition-colors flex items-center gap-1.5">
-                              <span className="text-xs">{currentStarter.elementIcon}</span>
-                              <span>{currentStarter.name}</span>
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                                currentStarter.type === "Fogo"
-                                  ? "bg-orange-950/80 text-orange-400 border border-orange-500/30"
-                                  : currentStarter.type === "Água"
-                                  ? "bg-blue-950/80 text-cyan-400 border border-cyan-500/30"
-                                  : "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30"
-                              }`}
-                            >
-                              {currentStarter.type}
-                            </span>
-                          </div>
-                          <span className="block text-[11px] text-zinc-400">
-                            {currentStarter.gen}ª Geração • Região de {currentStarter.region}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-indigo-300 font-semibold hidden sm:inline">
-                          {isStarterMenuOpen ? "Fechar Lista" : "Trocar Inicial"}
-                        </span>
-                        <div
-                          className={`w-8 h-8 rounded-lg bg-purple-950/60 border border-purple-800/60 flex items-center justify-center text-xs transition-transform duration-200 ${
-                            isStarterMenuOpen ? "rotate-180 text-cyan-400 border-cyan-500/40" : "text-zinc-400"
-                          }`}
-                        >
-                          ▼
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Painel que abre com os Pokémons da 1ª à 7ª Geração (FOTOS + SÍMBOLO NA FRENTE DO NOME) */}
-                    {isStarterMenuOpen && (
-                      <div className="mt-2 rounded-2xl bg-[#050813] border border-purple-800/80 p-4 shadow-2xl shadow-black animate-in fade-in duration-200">
-                        {/* Filtros rápidos por Geração */}
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-3 mb-3 border-b border-purple-950 text-xs no-scrollbar">
-                          <button
-                            type="button"
-                            onClick={() => setStarterGenFilter("all")}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold shrink-0 transition-all ${
-                              starterGenFilter === "all"
-                                ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow"
-                                : "bg-[#03050a] text-zinc-400 hover:text-white border border-purple-950"
-                            }`}
-                          >
-                            Todas
-                          </button>
-                          {[1, 2, 3, 4, 5, 6, 7].map((gen) => (
-                            <button
-                              key={gen}
-                              type="button"
-                              onClick={() => setStarterGenFilter(gen)}
-                              className={`px-3 py-1 rounded-lg text-xs font-bold shrink-0 transition-all ${
-                                starterGenFilter === gen
-                                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow"
-                                  : "bg-[#03050a] text-zinc-400 hover:text-white border border-purple-950"
-                              }`}
-                            >
-                              Gen {gen}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Lista rolável de Pokémons Iniciais com FOTOS */}
-                        <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
-                          {[1, 2, 3, 4, 5, 6, 7]
-                            .filter((gen) => starterGenFilter === "all" || starterGenFilter === gen)
-                            .map((gen) => {
-                              const genStarters = STARTER_POKEMON.filter((p) => p.gen === gen);
-                              const regionName = genStarters[0]?.region || "";
-
-                              return (
-                                <div key={gen} className="space-y-1.5">
-                                  <div className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider flex items-center justify-between px-1">
-                                    <span>{gen}ª Geração ({regionName})</span>
-                                    <span className="text-zinc-500 font-normal">3 Iniciais</span>
-                                  </div>
-
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {genStarters.map((pokemon) => {
-                                      const isSelected = selectedStarterId === pokemon.id;
-                                      return (
-                                        <button
-                                          key={pokemon.id}
-                                          type="button"
-                                          onClick={() => {
-                                            setSelectedStarterId(pokemon.id);
-                                            setIsStarterMenuOpen(false);
-                                          }}
-                                          className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center relative group/poke ${
-                                            isSelected
-                                              ? "border-cyan-400 bg-purple-950/80 ring-2 ring-cyan-400/40 text-white shadow-lg shadow-cyan-500/20"
-                                              : "border-purple-950 bg-[#03050a] text-zinc-300 hover:border-purple-700 hover:bg-purple-950/30"
-                                          }`}
-                                        >
-                                          {/* FOTO DO POKÉMON */}
-                                          <div className="w-14 h-14 p-1 mb-1 flex items-center justify-center">
-                                            <img
-                                              src={pokemon.image}
-                                              alt={pokemon.name}
-                                              className="w-full h-full object-contain drop-shadow group-hover/poke:scale-110 transition-transform"
-                                            />
-                                          </div>
-
-                                          {/* NOME COM SÍMBOLO DO ELEMENTO PEQUENO NA FRENTE */}
-                                          <span className="text-xs font-bold block truncate w-full flex items-center justify-center gap-1">
-                                            <span className="text-[11px]">{pokemon.elementIcon}</span>
-                                            <span>{pokemon.name}</span>
-                                          </span>
-
-                                          <span
-                                            className={`text-[9px] font-semibold uppercase mt-0.5 px-1.5 py-0.2 rounded ${
-                                              pokemon.type === "Fogo"
-                                                ? "text-orange-400 bg-orange-950/50"
-                                                : pokemon.type === "Água"
-                                                ? "text-cyan-400 bg-blue-950/50"
-                                                : "text-emerald-400 bg-emerald-950/50"
-                                            }`}
-                                          >
-                                            {pokemon.type}
-                                          </span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-
-                        <div className="mt-3 pt-2 border-t border-purple-950 flex items-center justify-between text-[11px] text-zinc-400">
-                          <span>Clique na foto do Pokémon para selecioná-lo</span>
-                          <button
-                            type="button"
-                            onClick={() => setIsStarterMenuOpen(false)}
-                            className="text-cyan-400 font-semibold hover:underline"
-                          >
-                            Concluir Escolha
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <button
                   type="submit"
@@ -1342,7 +1185,7 @@ export default function HomePage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. SEÇÃO: DOWNLOAD (WINDOWS - PALETA ROXO, AZUL E PRETO)                   */}
+      {/* 4. SEÇÃO: DOWNLOAD (WINDOWS)                                              */}
       {/* ========================================================================= */}
       <section id="download" className="py-20 border-t border-purple-950/60 relative">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1416,7 +1259,7 @@ export default function HomePage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* 5. SEÇÃO: INFORMAÇÃO & PÓDIO (PALETA ROXO, AZUL E PRETO)                   */}
+      {/* 5. SEÇÃO: INFORMAÇÃO & PÓDIO (SEM TAGS PVP / NON-PVP)                      */}
       {/* ========================================================================= */}
       <section id="informacao" className="py-20 bg-[#04060d] border-t border-purple-950/60 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1427,7 +1270,7 @@ export default function HomePage() {
               Os maiores mestres de PokéTibia por servidor. Escolha o mundo para ver a liderança da temporada!
             </p>
 
-            {/* Seletor de Servidor para o Ranking (Valaria, Orten, Zertiros) */}
+            {/* Seletor de Servidor para o Ranking (Sem tags PvP / Non-PvP) */}
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               {(["valaria", "orten", "zertiros"] as const).map((srvKey) => {
                 const srv = SERVERS[srvKey];
@@ -1444,9 +1287,6 @@ export default function HomePage() {
                     }`}
                   >
                     <span>Mundo {srv.name}</span>
-                    <span className="px-2 py-0.5 rounded-md bg-black/40 text-[10px] font-semibold text-cyan-300">
-                      {srv.pvpType}
-                    </span>
                     <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                   </button>
                 );
@@ -1457,11 +1297,9 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* ===================================================================== */}
-          {/* PÓDIO TOP 3 (1º, 2º e 3º LUGAR) - DINÂMICO                            */}
-          {/* ===================================================================== */}
+          {/* PÓDIO TOP 3 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end max-w-4xl mx-auto mb-16">
-            {/* 2º LUGAR (AZUL / PRATA) */}
+            {/* 2º LUGAR */}
             <div className="order-2 md:order-1 flex flex-col items-center">
               <div className="relative mb-3 flex flex-col items-center">
                 <span className="text-3xl mb-1">🥈</span>
@@ -1489,14 +1327,14 @@ export default function HomePage() {
                     <strong className="text-blue-400 font-semibold">{activeServerData.topPlayers.second.pokemon}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
-                    <span>PvP:</span>
+                    <span>Batalhas:</span>
                     <strong className="text-cyan-400 font-bold">{activeServerData.topPlayers.second.wins} Vitórias</strong>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 1º LUGAR (ROXO & AZUL MASTER - CAMPEÃO) */}
+            {/* 1º LUGAR */}
             <div className="order-1 md:order-2 flex flex-col items-center -mt-6">
               <div className="relative mb-3 flex flex-col items-center">
                 <span className="text-4xl animate-bounce mb-1">👑</span>
@@ -1527,14 +1365,14 @@ export default function HomePage() {
                     <strong className="text-purple-400 font-bold">{activeServerData.topPlayers.first.pokemon}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
-                    <span>PvP:</span>
+                    <span>Batalhas:</span>
                     <strong className="text-blue-400 font-bold">{activeServerData.topPlayers.first.wins} Vitórias</strong>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 3º LUGAR (ROXO / ÍNDIGO) */}
+            {/* 3º LUGAR */}
             <div className="order-3 flex flex-col items-center">
               <div className="relative mb-3 flex flex-col items-center">
                 <span className="text-3xl mb-1">🥉</span>
@@ -1562,7 +1400,7 @@ export default function HomePage() {
                     <strong className="text-purple-400 font-semibold">{activeServerData.topPlayers.third.pokemon}</strong>
                   </div>
                   <div className="flex justify-between text-zinc-400">
-                    <span>PvP:</span>
+                    <span>Batalhas:</span>
                     <strong className="text-cyan-400 font-bold">{activeServerData.topPlayers.third.wins} Vitórias</strong>
                   </div>
                 </div>
@@ -1570,9 +1408,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* ===================================================================== */}
-          {/* TABELA TOP 4 AO TOP 7 - DINÂMICA                                      */}
-          {/* ===================================================================== */}
+          {/* TABELA TOP 4 AO TOP 7 */}
           <div className="max-w-4xl mx-auto rounded-2xl bg-[#060914]/90 border border-purple-900/40 overflow-hidden shadow-xl shadow-black/80">
             <div className="px-6 py-4 border-b border-purple-950 flex items-center justify-between">
               <h4 className="text-sm font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
@@ -1606,7 +1442,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Banner Discord / Comunidade (Azul & Roxo) */}
+          {/* Banner Discord / Comunidade */}
           <div className="mt-10 p-8 rounded-3xl bg-gradient-to-r from-[#0e0a24] via-[#090e1f] to-[#04060d] border border-purple-500/30 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
             <div>
               <h3 className="text-2xl font-bold text-white">Participe da Nossa Comunidade no Discord</h3>

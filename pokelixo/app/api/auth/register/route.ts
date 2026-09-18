@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findAccountByName, findAccountByEmail, createAccount, createPlayer } from "@/lib/db";
+import { findAccountByName, findAccountByEmail, createAccount } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { account, email, password, server, starterPokemon } = body;
+    const { account, email, password, phone, referralCode } = body;
 
     // Validações básicas de formulário
     if (!account || !password) {
@@ -29,6 +29,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!phone || String(phone).trim().length < 6) {
+      return NextResponse.json(
+        { success: false, message: "Informe um número de telefone/WhatsApp válido para contato." },
+        { status: 400 }
+      );
+    }
+
     // 1. Verifica se a conta já existe
     const existingAccount = await findAccountByName(trimmedAccount);
     if (existingAccount) {
@@ -49,26 +56,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Cria a conta no banco de dados
+    // 3. Cria a conta no banco de dados com telefone e código de referência
     const newAccount = await createAccount({
       account: trimmedAccount,
       email: email ? String(email).trim() : "",
       password: String(password),
+      phone: phone ? String(phone).trim() : "",
+      referralCode: referralCode ? String(referralCode).trim() : "",
     });
-
-    // 4. Se o usuário escolheu o inicial ou o servidor no cadastro, cria o personagem inicial
-    if (starterPokemon || server) {
-      try {
-        await createPlayer({
-          accountId: newAccount.id,
-          name: trimmedAccount,
-          server: server ? String(server).toLowerCase() : "valaria",
-          pokemon: starterPokemon ? String(starterPokemon) : "Charmander",
-        });
-      } catch (e) {
-        console.warn("Aviso ao criar personagem no registro:", e);
-      }
-    }
 
     return NextResponse.json({
       success: true,
@@ -76,9 +71,10 @@ export async function POST(req: NextRequest) {
         id: newAccount.id,
         name: newAccount.name,
         email: newAccount.email,
+        phone: newAccount.phone,
         premdays: newAccount.premdays,
       },
-      message: `Conta "${trimmedAccount}" criada com sucesso! Faça login para acessar o painel e jogar.`,
+      message: `Conta "${trimmedAccount}" criada com sucesso! Faça login para criar seu personagem, escolher seu servidor e seu Pokémon inicial.`,
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : "Erro desconhecido";

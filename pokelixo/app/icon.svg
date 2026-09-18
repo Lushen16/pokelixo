@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <radialGradient id="purpleDome" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="35%" stop-color="#9333ea" />
+      <stop offset="75%" stop-color="#6b21a8" />
+      <stop offset="100%" stop-color="#3b0764" />
+    </radialGradient>
+    <radialGradient id="pinkBump" cx="35%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#f472b6" />
+      <stop offset="50%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#9d174d" />
+    </radialGradient>
+    <radialGradient id="whiteDome" cx="35%" cy="75%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="60%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </radialGradient>
+    <radialGradient id="cyanCore" cx="35%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#67e8f9" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#0e7490" />
+    </radialGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#a855f7" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <circle cx="64" cy="64" r="60" fill="#090d16" stroke="#000000" stroke-width="4" filter="url(#glow)"/>
+  <path d="M 4 64 A 60 60 0 0 0 124 64 Z" fill="url(#whiteDome)" stroke="#090d16" stroke-width="3"/>
+  <path d="M 4 64 A 60 60 0 0 1 124 64 Z" fill="url(#purpleDome)" stroke="#090d16" stroke-width="3"/>
+  <ellipse cx="36" cy="38" rx="19" ry="14" transform="rotate(-25 36 38)" fill="url(#pinkBump)" stroke="#3b0764" stroke-width="2"/>
+  <ellipse cx="92" cy="38" rx="19" ry="14" transform="rotate(25 92 38)" fill="url(#pinkBump)" stroke="#3b0764" stroke-width="2"/>
+  <path d="M 48 42 L 56 22 L 64 36 L 72 22 L 80 42 L 73 42 L 68 29 L 64 36 L 60 29 L 55 42 Z" fill="#ffffff" stroke="#3b0764" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="4" y="58" width="120" height="12" fill="#090d16" />
+  <circle cx="64" cy="64" r="20" fill="#090d16" stroke="#000000" stroke-width="2"/>
+  <circle cx="64" cy="64" r="14" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <circle cx="64" cy="64" r="9" fill="url(#cyanCore)" stroke="#083344" stroke-width="1"/>
+  <circle cx="61" cy="61" r="3" fill="#ffffff" opacity="0.8"/>
+  <path d="M 24 24 A 50 50 0 0 1 104 24 A 58 58 0 0 0 24 24 Z" fill="#ffffff" opacity="0.25"/>
+</svg>

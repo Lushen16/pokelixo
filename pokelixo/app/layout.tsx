@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PokéTibia Online - O Melhor Servidor MMORPG",
   description: "Crie sua conta, baixe o cliente e explore um mundo Pokémon incrível no PokéTibia! Torneios, Quests e Batalhas Épicas.",
+  icons: {
+    icon: "/masterball.svg",
+    shortcut: "/masterball.svg",
+    apple: "/masterball.svg",
+  },
 };
 
 export default function RootLayout({
