@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeQuery, hashPassword, testDbConnection } from "@/lib/db";
-import type { RowDataPacket, ResultSetHeader } from "mysql2";
-
-interface AccountRow extends RowDataPacket {
-  id: number;
-}
+import { findAccountByName, findAccountByEmail, createAccount } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { account, email, password, server, starterPokemon } = body;
 
-    // Validações básicas
+    // Validações básicas de formulário
     if (!account || !password) {
       return NextResponse.json(
         { success: false, message: "Nome da conta e senha são obrigatórios." },
@@ -19,56 +14,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (account.length < 3 || account.length > 32) {
+    const trimmedAccount = String(account).trim();
+    if (trimmedAccount.length < 3 || trimmedAccount.length > 32) {
       return NextResponse.json(
         { success: false, message: "O nome da conta deve ter entre 3 e 32 caracteres." },
         { status: 400 }
       );
     }
 
-    if (password.length < 4) {
+    if (String(password).length < 4) {
       return NextResponse.json(
         { success: false, message: "A senha deve conter no mínimo 4 caracteres." },
         { status: 400 }
       );
     }
 
-    // 1. Testa a conexão com o banco de dados MySQL
-    const connTest = await testDbConnection();
-    if (!connTest.connected) {
-      // Retorna instrução clara para o desenvolvedor / usuário
+    // 1. Verifica se a conta já existe
+    const existingAccount = await findAccountByName(trimmedAccount);
+    if (existingAccount) {
       return NextResponse.json(
-        {
-          success: false,
-          isDbOffline: true,
-          message:
-            "Aviso: Não foi possível conectar ao MySQL do PokéTibia. Verifique se o MySQL está rodando e se as variáveis DB_HOST, DB_USER e DB_PASSWORD estão preenchidas no .env ou no painel da Vercel.",
-          debugError: connTest.error,
-        },
-        { status: 503 }
-      );
-    }
-
-    // 2. Verifica se a conta já existe na tabela 'accounts'
-    const existingAccounts = await executeQuery<AccountRow[]>(
-      "SELECT id FROM accounts WHERE name = ? LIMIT 1",
-      [account]
-    );
-
-    if (existingAccounts && existingAccounts.length > 0) {
-      return NextResponse.json(
-        { success: false, message: `O nome de conta "${account}" já está em uso. Escolha outro.` },
+        { success: false, message: `O nome de conta "${trimmedAccount}" já está em uso. Escolha outro.` },
         { status: 409 }
       );
     }
 
-    // 3. Verifica se o e-mail já existe (se informado)
-    if (email) {
-      const existingEmail = await executeQuery<AccountRow[]>(
-        "SELECT id FROM accounts WHERE email = ? LIMIT 1",
-        [email]
-      );
-      if (existingEmail && existingEmail.length > 0) {
+    // 2. Verifica se o e-mail já está cadastrado
+    if (email && String(email).trim()) {
+      const existingEmail = await findAccountByEmail(String(email).trim());
+      if (existingEmail) {
         return NextResponse.json(
           { success: false, message: "Este e-mail já está associado a outra conta." },
           { status: 409 }
@@ -76,19 +49,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Cria a conta no banco de dados (padrão TFS/OTX)
-    const hashedPassword = hashPassword(password);
-    const creationTimestamp = Math.floor(Date.now() / 1000);
+    // 3. Cria a conta no banco de dados
+    const chosenServer = server ? String(server).toLowerCase() : "valaria";
+    const chosenStarter = starterPokemon ? String(starterPokemon) : "Charmander";
 
-    const result = await executeQuery<ResultSetHeader>(
-      "INSERT INTO accounts (name, password, email, premdays, creation) VALUES (?, ?, ?, ?, ?)",
-      [account, hashedPassword, email || "", 3, creationTimestamp]
-    );
+    const newAccount = await createAccount({
+      account: trimmedAccount,
+      email: email ? String(email).trim() : "",
+      password: String(password),
+      server: chosenServer,
+      starter: chosenStarter,
+    });
 
     return NextResponse.json({
       success: true,
-      accountId: result?.insertId,
-      message: `Conta "${account}" criada com sucesso no servidor ${server ? String(server).toUpperCase() : "OFICIAL"}! Inicial: ${starterPokemon ? String(starterPokemon).toUpperCase() : "ESCOLHIDO"}.`,
+      account: {
+        id: newAccount.id,
+        name: newAccount.name,
+        email: newAccount.email,
+        server: newAccount.server,
+        starter: newAccount.starter,
+      },
+      message: `Conta "${trimmedAccount}" criada com sucesso no servidor ${chosenServer.toUpperCase()}! Inicial escolhido: ${chosenStarter}.`,
     });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : "Erro desconhecido";
@@ -96,7 +78,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: "Ocorreu um erro interno ao processar o cadastro no banco de dados.",
+        message: "Ocorreu um erro interno ao processar o cadastro.",
         error: errorMsg,
       },
       { status: 500 }

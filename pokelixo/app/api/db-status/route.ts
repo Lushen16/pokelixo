@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
-import { testDbConnection } from "@/lib/db";
+import { checkDbStatus } from "@/lib/db";
 
 export async function GET() {
-  const result = await testDbConnection();
+  const result = await checkDbStatus();
 
   return NextResponse.json({
-    status: result.connected ? "connected" : "disconnected",
-    dbHost: process.env.DB_HOST ? `${process.env.DB_HOST.slice(0, 4)}***` : "127.0.0.1",
-    dbName: process.env.DB_NAME || "poketibia",
+    status: result.connected ? "connected" : "fallback",
+    provider: result.provider,
     message: result.connected
-      ? "Conexão com o banco MySQL do PokéTibia estabelecida com sucesso!"
-      : "Banco de dados MySQL desconectado ou inacessível no momento.",
+      ? "Banco de dados Vercel Postgres conectado e operacional!"
+      : "Rodando com armazenamento de contingência (Vercel Storage / Postgres não ativado no dashboard).",
     error: result.error,
   });
 }
